@@ -6,6 +6,10 @@
 3. [Production Readiness](#production-readiness)
 4. [Database Optimization](#database-optimization)
 5. [Caching Strategies](#caching-strategies)
+6. [JVM Tuning](#jvm-tuning)
+7. [Distributed Tracing](#distributed-tracing)
+8. [API Versioning](#api-versioning)
+9. [Memory Management](#memory-management)
 
 ---
 
@@ -294,4 +298,86 @@ spring:
     redis:
       host: localhost
       port: 6379
+
+---
+
+## JVM Tuning
+Optimizing the JVM is crucial for high-performance Spring Boot applications.
+
+### 1. Garbage Collection (GC)
+- **G1GC (Garbage First GC)**: Default since Java 9. Good for large heaps with low pause time requirements.
+- **ZGC (Z Garbage Collector)**: Available since Java 15. Designed for sub-millisecond pause times even with very large heaps.
+
+**Enable ZGC**:
+```bash
+java -XX:+UseZGC -jar app.jar
 ```
+
+### 2. Memory Settings
+- **Xms**: Initial heap size.
+- **Xmx**: Maximum heap size.
+- **XX:MaxMetaspaceSize**: Limit for class metadata.
+
+**Best Practice**: Set `Xms` and `Xmx` to the same value to avoid heap resizing overhead.
+
+---
+
+## Distributed Tracing
+Distributed tracing helps track requests across multiple services.
+
+### 1. Micrometer Tracing
+Spring Boot 3 uses Micrometer Tracing (replacing Spring Cloud Sleuth).
+
+**Dependencies**:
+```xml
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-tracing-bridge-brave</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.zipkin.reporter2</groupId>
+    <artifactId>zipkin-reporter-brave</artifactId>
+</dependency>
+```
+
+### 2. Visualization
+Use **Zipkin** or **Jaeger** to visualize the traces.
+
+---
+
+## API Versioning
+Versioning ensures backward compatibility as your API evolves.
+
+### 1. URI Versioning (Most Common)
+```java
+@RestController
+@RequestMapping("/api/v1/users")
+public class UserV1Controller { ... }
+```
+
+### 2. Header Versioning
+```java
+@GetMapping(value = "/users", headers = "X-API-VERSION=1")
+public List<User> getUsersV1() { ... }
+```
+
+### 3. Media Type Versioning (Content Negotiation)
+```java
+@GetMapping(value = "/users", produces = "application/vnd.company.app-v1+json")
+public List<User> getUsersV1() { ... }
+```
+
+---
+
+## Memory Management
+Preventing memory leaks is essential for long-running applications.
+
+### 1. Common Causes of Leaks
+- **Static Collections**: Holding references in static lists/maps.
+- **Unclosed Resources**: Not closing streams, database connections, or HTTP clients.
+- **Inner Classes**: Non-static inner classes holding a reference to the outer class.
+
+### 2. Detection Tools
+- **VisualVM**: Basic monitoring and heap dumps.
+- **Eclipse MAT (Memory Analyzer Tool)**: Deep analysis of heap dumps to find leak suspects.
+- **YourKit**: Commercial profiler with advanced leak detection.

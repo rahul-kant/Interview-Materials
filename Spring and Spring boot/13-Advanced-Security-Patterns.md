@@ -1,0 +1,107 @@
+# Advanced Spring Security Patterns
+
+## Table of Contents
+1. [OAuth2 and OpenID Connect (OIDC)](#oauth2-and-openid-connect-oidc)
+2. [Proof Key for Code Exchange (PKCE)](#proof-key-for-code-exchange-pkce)
+3. [JWT Best Practices & Security](#jwt-best-practices--security)
+4. [Custom Security Filter Chains](#custom-security-filter-chains)
+5. [Method-Level Security Deep Dive](#method-level-security-deep-dive)
+
+---
+
+## OAuth2 and OpenID Connect (OIDC)
+OAuth2 is for **Authorization**, OIDC is for **Authentication** (built on top of OAuth2).
+
+### Key Roles
+- **Resource Owner**: The user.
+- **Client**: The application requesting access.
+- **Authorization Server**: Issues tokens (e.g., Keycloak, Okta, Auth0).
+- **Resource Server**: The API being protected.
+
+### Spring Security Implementation
+```java
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(auth -> auth
+                .anyRequest().authenticated()
+            )
+            .oauth2Login(withDefaults()) // OIDC Login
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(withDefaults())); // API Protection
+        return http.build();
+    }
+}
+```
+
+---
+
+## Proof Key for Code Exchange (PKCE)
+PKCE (pronounced "pixie") is an extension to the Authorization Code flow to prevent authorization code injection attacks. Originally for mobile/SPA, now recommended for **all** clients.
+
+### How it Works
+1. Client creates a `code_verifier` and its hash `code_challenge`.
+2. Client sends `code_challenge` during authorization request.
+3. Auth server stores `code_challenge`.
+4. Client sends `code_verifier` when exchanging code for token.
+5. Auth server verifies `hash(code_verifier) == code_challenge`.
+
+---
+
+## JWT Best Practices & Security
+- **Short Expiration**: Use short-lived Access Tokens and longer-lived Refresh Tokens.
+- **Signing Algorithms**: Use asymmetric algorithms like **RS256** (RSA) or **ES256** (ECDSA) instead of HS256.
+- **Claims**: Don't store sensitive data in JWT (it's only encoded, not encrypted).
+- **Validation**: Always validate `iss` (issuer), `aud` (audience), and `exp` (expiration).
+
+### Refresh Token Rotation
+Every time a refresh token is used, issue a **new** refresh token and invalidate the old one. This detects token theft.
+
+---
+
+## Custom Security Filter Chains
+Spring Security 6+ uses a component-based configuration instead of `WebSecurityConfigurerAdapter`.
+
+### Multiple Filter Chains
+```java
+@Bean
+@Order(1)
+public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
+    http
+        .securityMatcher("/api/**")
+        .authorizeHttpRequests(auth -> auth.anyRequest().hasRole("API_USER"))
+        .httpBasic(withDefaults());
+    return http.build();
+}
+
+@Bean
+public SecurityFilterChain webFilterChain(HttpSecurity http) throws Exception {
+    http
+        .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+        .formLogin(withDefaults());
+    return http.build();
+}
+```
+
+---
+
+## Method-Level Security Deep Dive
+Use `@EnableMethodSecurity` (replaces `@EnableGlobalMethodSecurity`).
+
+### Advanced Expressions
+```java
+@Service
+public class DocumentService {
+    
+    @PreAuthorize("hasPermission(#id, 'Document', 'READ')")
+    public Document getDocument(Long id) { ... }
+
+    @PostFilter("filterObject.owner == authentication.name")
+    public List<Document> getAllDocuments() { ... }
+}
+```
+- **@PreAuthorize**: Checked before method execution.
+- **@PostAuthorize**: Checked after method execution (can access return object via `returnObject`).
+- **@PreFilter / @PostFilter**: Filters collections based on security rules.

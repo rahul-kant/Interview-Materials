@@ -9,8 +9,38 @@
 6. [Circuit Breakers (Resilience4j)](#circuit-breakers-resilience4j)
 7. [Distributed Tracing](#distributed-tracing)
 8. [Microservices Patterns](#microservices-patterns)
+9. [Saga Pattern Deep Dive](#saga-pattern-deep-dive)
+10. [Service Mesh (Istio/Linkerd)](#service-mesh-istiolinkerd)
+11. [Rate Limiting](#rate-limiting)
 
 ---
+
+## Microservices Architecture
+
+### 🧠 ELI5: The "Lego Set" vs the "Stone Statue"
+
+*   **Monolith (Stone Statue):** Imagine a statue carved from a single block of stone. If you want to change the statue's hat, you have to be very careful not to crack the whole thing. If the base breaks, the entire statue falls.
+*   **Microservices (Lego Set):** Imagine a castle built with Legos. If you want to change the tower, you just pull that specific part off and replace it. The rest of the castle stays exactly as it is. If one Lego brick breaks, the rest of the castle is still standing.
+
+### 🗺️ Mindmap: Microservices Overview
+
+```mermaid
+mindmap
+  root((Microservices))
+    Principles
+      Independence(Independently Deployable)
+      Single_Responsibility(Single Responsibility)
+      Decentralized(Decentralized Data)
+    Challenges
+      Complexity(Operational Complexity)
+      Consistency(Data Consistency)
+      Network(Network Latency)
+    Patterns
+      Discovery(Service Discovery)
+      Gateway(API Gateway)
+      Resilience(Circuit Breakers)
+      Config(Centralized Config)
+```
 
 ## Microservices Architecture
 
@@ -46,6 +76,32 @@ Spring Cloud provides tools for developers to quickly build some of the common p
 - **Spring Cloud Stream**: Event-driven microservices.
 
 ---
+
+---
+
+## Service Discovery (Eureka)
+
+### 🧠 ELI5: The "Phone Book"
+
+Imagine you live in a city where everyone moves to a new house every single day.
+
+*   **Without Service Discovery:** You have to call everyone every morning to ask for their new address. If someone forgets to tell you, you can't find them.
+*   **With Service Discovery (Eureka):** There is a **Central Phone Book** (Eureka Server). Every morning, everyone calls the Phone Book and says, "Hi, I'm the Pizza Guy, and I live at 123 Maple St today." When you want pizza, you just check the Phone Book.
+
+### 🗺️ Mindmap: Service Discovery
+
+```mermaid
+sequenceDiagram
+    participant S as Service (Client)
+    participant E as Eureka (Server)
+    participant C as Consumer
+
+    S->>E: 1. Register (I am 'Order-Service' at IP X)
+    S->>E: 2. Heartbeat (I'm still alive)
+    C->>E: 3. Fetch Registry (Where is 'Order-Service'?)
+    E-->>C: 4. Return IP X
+    C->>S: 5. Direct Call to IP X
+```
 
 ## Service Discovery (Eureka)
 
@@ -117,6 +173,35 @@ eureka:
 ```
 
 ---
+
+---
+
+## API Gateway (Spring Cloud Gateway)
+
+### 🧠 ELI5: The "Hotel Receptionist"
+
+Imagine a huge **Hotel** with 100 different rooms (services).
+
+*   **Without a Gateway:** Guests have to wander the hallways, looking for the specific room they need. They have to show their ID at every single door.
+*   **With a Gateway:** There is a **Receptionist** at the front door. You tell her, "I want to go to the Gym." She checks your ID once, gives you a key, and tells you exactly which way to go. She also makes sure too many people don't enter the Gym at once (Rate Limiting).
+
+### 🗺️ Mindmap: API Gateway
+
+```mermaid
+mindmap
+  root((API Gateway))
+    Routing
+      Predicates(Where to go?)
+      Filters(What to do?)
+    Cross_Cutting
+      Security(Authentication/JWT)
+      Resilience(Circuit Breakers)
+      Monitoring(Logging/Metrics)
+      Rate_Limiting(Rate Limiting)
+    Benefits
+      Single_Entry(Single Entry Point)
+      Abstraction(Hide Internal Complexity)
+```
 
 ## API Gateway (Spring Cloud Gateway)
 
@@ -225,6 +310,44 @@ spring:
 ```
 
 ---
+
+---
+
+## Circuit Breakers (Resilience4j)
+
+### 🧠 ELI5: The "Electrical Fuse"
+
+Imagine your house has a **Fuse Box**.
+
+*   **Closed (Normal):** Electricity flows normally. You turn on the TV, and it works.
+*   **Open (Tripped):** Suddenly, there is a power surge (a service starts failing). The fuse "trips" and cuts off the power. Now, when you try to turn on the TV, it doesn't even try to draw power; it just stays off. This protects your TV from burning out.
+*   **Half-Open (Testing):** After a while, you try to flip the fuse back. You turn on *one* light. If it works, you turn on the rest. If it pops again, you wait longer.
+
+### 🗺️ Mindmap: Circuit Breaker States
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Open: Failure Threshold Reached
+    Open --> HalfOpen: Wait Duration Over
+    HalfOpen --> Open: Failure Still Occurs
+    HalfOpen --> Closed: Success Threshold Reached
+
+    subgraph "Closed State"
+    direction LR
+    C1[Normal Operation]
+    end
+
+    subgraph "Open State"
+    direction LR
+    O1[Fast Fail - No Calls]
+    end
+
+    subgraph "Half-Open State"
+    direction LR
+    H1[Limited Testing]
+    end
+```
 
 ## Circuit Breakers (Resilience4j)
 
@@ -345,7 +468,6 @@ public Supplier<OrderEvent> orderSupplier() {
     return () -> new OrderEvent(orderId, "CREATED");
 }
 
-// Consumer
 @Bean
 public Consumer<OrderEvent> orderConsumer() {
     return event -> {
@@ -353,3 +475,71 @@ public Consumer<OrderEvent> orderConsumer() {
     };
 }
 ```
+
+---
+
+## Saga Pattern Deep Dive
+The Saga pattern is essential for maintaining data consistency across microservices without distributed transactions.
+
+### 1. Choreography-Based Saga
+- **Pros**: Simple, loosely coupled, no single point of failure.
+- **Cons**: Difficult to track the state of a saga, risk of cyclic dependencies.
+- **Best For**: Simple sagas with few steps.
+
+### 2. Orchestration-Based Saga
+- **Pros**: Centralized logic, easier to debug and monitor, no cyclic dependencies.
+- **Cons**: Orchestrator can become complex, single point of failure (needs high availability).
+- **Best For**: Complex sagas with many steps and complex logic.
+
+### Compensating Transactions
+Every step in a saga must have a corresponding "undo" action. If step 3 fails, the saga must execute compensating transactions for step 2 and step 1.
+
+---
+
+## Service Mesh (Istio/Linkerd)
+A Service Mesh is a dedicated infrastructure layer for handling service-to-service communication.
+
+### Key Features
+- **Traffic Management**: Canary deployments, A/B testing, blue-green deployments.
+- **Security**: Mutual TLS (mTLS) by default, fine-grained access control.
+- **Observability**: Automatic metrics, logs, and traces for all traffic.
+- **Resilience**: Retries, timeouts, and circuit breakers at the infrastructure level.
+
+### Sidecar Pattern
+The mesh is usually implemented using a "sidecar" proxy (like Envoy) that runs alongside each service instance.
+
+---
+
+## Rate Limiting
+Rate limiting protects your services from being overwhelmed by too many requests.
+
+### 1. Spring Cloud Gateway Rate Limiter
+Uses Redis to track request counts.
+
+**application.yml**:
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+```
+
+### 2. Resilience4j Rate Limiter
+Can be used within a specific service.
+
+```java
+@RateLimiter(name = "userService", fallbackMethod = "rateLimitFallback")
+public UserDTO getUser(Long id) { ... }
+
+public UserDTO rateLimitFallback(Long id, RequestNotPermitted ex) {
+    // Return a cached response or error
+}
+```
+

@@ -6,11 +6,47 @@
 3. [Authorization](#authorization)
 4. [JWT Authentication](#jwt-authentication)
 5. [OAuth 2.0 & OpenID Connect](#oauth-20--openid-connect)
-6. [Security Best Practices](#security-best-practices)
-7. [Common Security Configurations](#common-security-configurations)
-8. [Interview Questions](#interview-questions)
+6. [Security Filter Chain Internals](#security-filter-chain-internals)
+7. [OAuth2/OIDC: Authorization Code + PKCE](#oauth2oidc-authorization-code--pkce)
+8. [JWT Refresh Token Rotation](#jwt-refresh-token-rotation)
+9. [CSRF & CORS Deep Dive](#csrf--cors-deep-dive)
+10. [Migration from WebSecurityConfigurerAdapter](#migration-from-websecurityconfigureradapter)
+11. [Security Best Practices](#security-best-practices)
+12. [Common Security Configurations](#common-security-configurations)
+13. [Interview Questions](#interview-questions)
 
 ---
+
+## Spring Security Fundamentals
+
+### 🧠 ELI5: The "Nightclub Bouncer"
+
+Imagine you are trying to enter a **VIP Nightclub**.
+
+1.  **Authentication (ID Check):** The bouncer at the door asks, "Who are you?" You show your ID. He verifies it's really you.
+2.  **Authorization (VIP List):** Once he knows who you are, he checks his clipboard. "Are you on the VIP list?" If yes, you can go to the VIP lounge. If no, you can only stay in the main area.
+3.  **Security Context:** The bouncer gives you a **Wristband**. As long as you have it, other guards inside the club don't have to ask for your ID again. They just look at your wristband.
+
+### 🗺️ Mindmap: Spring Security Overview
+
+```mermaid
+mindmap
+  root((Spring Security))
+    Core_Concepts
+      Authentication(Authentication - Who?)
+      Authorization(Authorization - What?)
+      Principal(Principal - User)
+      Authorities(Authorities - Roles/Perms)
+    Architecture
+      FilterChain(Security Filter Chain)
+      SecurityContext(Security Context Holder)
+      AuthenticationManager(Authentication Manager)
+    Features
+      JWT(JWT Support)
+      OAuth2(OAuth2 / OIDC)
+      Protection(CSRF / CORS / XSS)
+      Method_Security(Method Level Security)
+```
 
 ## Spring Security Fundamentals
 
@@ -421,6 +457,37 @@ public void updateUser(Long userId, UserDTO dto) {
 
 ---
 
+---
+
+## JWT Authentication
+
+### 🧠 ELI5: The "Movie Ticket"
+
+Imagine you buy a **Movie Ticket** online.
+
+1.  **Login:** You pay for the ticket (send username/password).
+2.  **Token Generation:** The website gives you a **QR Code** (JWT). This code contains the movie name, your seat number, and a digital signature from the cinema.
+3.  **Usage:** When you get to the cinema, you don't show your credit card again. You just show the QR Code. The usher scans it, verifies the signature is real, and lets you in.
+4.  **Stateless:** The usher doesn't need to call the website to check if you paid. All the info he needs is right there in the QR Code.
+
+### 🗺️ Mindmap: JWT Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant S as Server
+    participant DB as Database
+
+    U->>S: 1. Login (User/Pass)
+    S->>DB: 2. Verify User
+    DB-->>S: 3. User Valid
+    S->>S: 4. Create JWT (Signed)
+    S-->>U: 5. Return JWT
+    U->>S: 6. Request + JWT (Header)
+    S->>S: 7. Validate Signature
+    S-->>U: 8. Return Data
+```
+
 ## JWT Authentication
 
 ### JWT Configuration
@@ -690,6 +757,34 @@ public class JwtAuthResponse {
 
 ---
 
+---
+
+## OAuth 2.0 & OpenID Connect
+
+### 🧠 ELI5: The "Hotel Key Card"
+
+Imagine you are staying at a **Hotel**.
+
+1.  **Authentication (OIDC):** You show your ID at the front desk. They verify who you are and give you a **Key Card**.
+2.  **Authorization (OAuth2):** The Key Card doesn't give you the whole hotel. It only gives you access to **Room 302** and the **Gym**. The "Scope" is what the card is allowed to open.
+3.  **Third-Party Access:** If you want a **Pizza Delivery** guy to bring food to your room, you don't give him your ID. You give him a temporary "Guest Pass" (Access Token) that only lets him enter the lobby and your floor.
+
+### 🗺️ Mindmap: OAuth2 Roles
+
+```mermaid
+mindmap
+  root((OAuth2 Roles))
+    Resource_Owner(Resource Owner - The User)
+    Client(Client - The App)
+    Resource_Server(Resource Server - The API)
+    Authorization_Server(Auth Server - Google/GitHub)
+    Flows
+      Auth_Code(Authorization Code - Most Secure)
+      Implicit(Implicit - Legacy)
+      Client_Creds(Client Credentials - M2M)
+      Password(Password - Legacy)
+```
+
 ## OAuth 2.0 & OpenID Connect
 
 ### OAuth 2.0 Client Configuration
@@ -780,6 +875,153 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             });
         
         return new CustomOAuth2User(oauth2User, user);
+    }
+}
+```
+
+---
+
+---
+
+---
+
+## Security Filter Chain Internals
+
+### 🧠 ELI5: The "Airport Security"
+
+Think of the **Security Filter Chain** as the series of checks you go through at an **Airport**.
+
+1.  **Check-in Filter:** Checks your ticket (Authentication).
+2.  **TSA Filter:** Checks your bags for prohibited items (CSRF/XSS protection).
+3.  **Passport Control Filter:** Checks if you have the right visa for your destination (Authorization).
+4.  **Boarding Filter:** Final check before you enter the plane (Resource access).
+
+If you fail *any* of these checks, you are turned back and never reach the plane (your Controller).
+
+### 🗺️ Mindmap: Security Filter Chain
+
+```mermaid
+graph TD
+    Req((Request)) --> F1[1. SecurityContextPersistenceFilter]
+    F1 --> F2[2. LogoutFilter]
+    F2 --> F3[3. UsernamePasswordAuthenticationFilter]
+    F3 --> F4[4. DefaultLoginPageGeneratingFilter]
+    F4 --> F5[5. BasicAuthenticationFilter]
+    F5 --> F6[6. SecurityContextHolderAwareRequestFilter]
+    F6 --> F7[7. AnonymousAuthenticationFilter]
+    F7 --> F8[8. ExceptionTranslationFilter]
+    F8 --> F9[9. FilterSecurityInterceptor]
+    F9 --> Controller((Controller))
+
+    subgraph "Authentication"
+    F3
+    F5
+    end
+
+    subgraph "Authorization"
+    F9
+    end
+```
+
+## Security Filter Chain Internals
+
+### How it Works
+Spring Security is essentially a chain of Servlet Filters. The `DelegatingFilterProxy` intercepts the request and delegates it to the `FilterChainProxy`, which then runs the `SecurityFilterChain`.
+
+### Key Filters in Order:
+1.  **SecurityContextPersistenceFilter**: Loads/Saves SecurityContext from/to Session.
+2.  **LogoutFilter**: Handles logout requests.
+3.  **UsernamePasswordAuthenticationFilter**: Handles form login.
+4.  **DefaultLoginPageGeneratingFilter**: Generates the default login page.
+5.  **BasicAuthenticationFilter**: Handles Basic Auth headers.
+6.  **RequestCacheAwareFilter**: Restores the request after login.
+7.  **SecurityContextHolderAwareRequestFilter**: Wraps the request to support `HttpServletRequest` security methods.
+8.  **AnonymousAuthenticationFilter**: Assigns an "anonymous" user if not authenticated.
+9.  **SessionManagementFilter**: Handles session fixation, concurrency, etc.
+10. **ExceptionTranslationFilter**: Catches security exceptions and starts authentication or returns 403.
+11. **FilterSecurityInterceptor**: The final filter that checks authorization via `AccessDecisionManager`.
+
+---
+
+## OAuth2/OIDC: Authorization Code + PKCE
+
+### Why PKCE?
+**PKCE (Proof Key for Code Exchange)** was originally designed for mobile apps but is now recommended for **all** clients (including SPAs) to prevent authorization code injection attacks.
+
+### The Flow:
+1.  **Code Challenge**: Client generates a secret `code_verifier` and its hash `code_challenge`.
+2.  **Auth Request**: Client sends `code_challenge` to Auth Server.
+3.  **Auth Code**: User authenticates; Auth Server returns `code`.
+4.  **Token Request**: Client sends `code` + `code_verifier`.
+5.  **Verification**: Auth Server hashes `code_verifier` and compares it with the original `code_challenge`. If they match, it issues tokens.
+
+---
+
+## JWT Refresh Token Rotation
+
+### The Problem with Long-Lived JWTs
+If a JWT is stolen, the attacker has access until it expires. If it's short-lived, the user has to log in frequently.
+
+### The Solution: Refresh Tokens
+1.  **Login**: Server issues a short-lived **Access Token** (e.g., 15m) and a long-lived **Refresh Token** (e.g., 7d).
+2.  **Refresh**: When Access Token expires, Client sends Refresh Token to get a new Access Token.
+3.  **Rotation**: Every time a Refresh Token is used, the server issues a **NEW** Refresh Token and invalidates the old one.
+4.  **Detection**: If an old Refresh Token is used, the server assumes a breach and invalidates **ALL** tokens for that user.
+
+---
+
+## CSRF & CORS Deep Dive
+
+### CSRF (Cross-Site Request Forgery)
+- **What**: Attacker tricks user's browser into sending a request to your site using the user's session cookie.
+- **Protection**: Synchronizer Token Pattern. Spring Security adds a hidden `_csrf` token to forms.
+- **When to disable**: For stateless APIs using JWT (since there's no session cookie to steal).
+
+### CORS (Cross-Origin Resource Sharing)
+- **What**: Browser security feature that restricts web pages from making requests to a different domain.
+- **Preflight**: For "non-simple" requests (e.g., with `Authorization` header), the browser sends an `OPTIONS` request first.
+- **Configuration**:
+    ```java
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of("https://myapp.com"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+    ```
+
+---
+
+## Migration from WebSecurityConfigurerAdapter
+
+In Spring Security 6 (Spring Boot 3), `WebSecurityConfigurerAdapter` is **removed**.
+
+### Old Way (Spring Security 5.x):
+```java
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.authorizeRequests().anyRequest().authenticated();
+    }
+}
+```
+
+### New Way (Spring Security 6.x):
+```java
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(auth -> auth
+                .anyRequest().authenticated()
+            );
+        return http.build();
     }
 }
 ```

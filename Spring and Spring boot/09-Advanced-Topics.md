@@ -10,6 +10,33 @@
 
 ## Reactive Programming with Spring WebFlux
 
+### 🧠 ELI5: The "Fast Food Counter" vs the "Sit-down Restaurant"
+
+*   **Spring MVC (Sit-down Restaurant):** You sit at a table. A waiter (thread) comes to you. He takes your order, goes to the kitchen, and **waits** there until the food is ready. While he is waiting, he can't help anyone else. If the kitchen is slow, you need more waiters for more customers.
+*   **Spring WebFlux (Fast Food Counter):** You place your order at the counter. The cashier (thread) gives you a buzzer and immediately helps the next person. When your food is ready, your buzzer goes off (event), and you go pick it up. One cashier can handle hundreds of customers because they never stand around waiting.
+
+### 🗺️ Mindmap: Reactive Programming
+
+```mermaid
+mindmap
+  root((Spring WebFlux))
+    Core_Concepts
+      Non_Blocking(Non-blocking I/O)
+      Asynchronous(Asynchronous)
+      Backpressure(Backpressure)
+    Reactor_Types
+      Mono(Mono - 0 or 1)
+      Flux(Flux - 0 to N)
+    Comparison
+      MVC(MVC - Blocking)
+      WebFlux(WebFlux - Non-blocking)
+    Infrastructure
+      Netty(Netty - Default Server)
+      WebClient(WebClient - Reactive Client)
+```
+
+## Reactive Programming with Spring WebFlux
+
 ### What is Reactive Programming?
 Reactive programming is a paradigm oriented around data flows and the propagation of change. It is non-blocking, asynchronous, and event-driven.
 
@@ -98,6 +125,37 @@ public class ExternalApiService {
 
 ---
 
+---
+
+## Messaging & Event-Driven Architecture
+
+### 🧠 ELI5: The "Post Office"
+
+Imagine you want to send a **Letter** to a friend.
+
+*   **Synchronous (HTTP):** You drive to your friend's house, knock on the door, and wait for them to answer so you can hand them the letter. If they aren't home, you just stand there waiting.
+*   **Asynchronous (Messaging):** You put the letter in a **Mailbox** (Queue). You can go back home and do other things. The mailman (Broker) will deliver it whenever your friend is ready to receive it. You don't have to wait for them.
+
+### 🗺️ Mindmap: Messaging Concepts
+
+```mermaid
+mindmap
+  root((Messaging))
+    Components
+      Producer(Producer - Sender)
+      Consumer(Consumer - Receiver)
+      Broker(Broker - RabbitMQ/Kafka)
+      Exchange_Topic(Exchange/Topic)
+    RabbitMQ
+      Queues(Queues)
+      Exchanges(Exchanges)
+      Routing(Routing Keys)
+    Kafka
+      Topics(Topics)
+      Partitions(Partitions)
+      ConsumerGroups(Consumer Groups)
+```
+
 ## Messaging & Event-Driven Architecture
 
 ### Spring AMQP (RabbitMQ)
@@ -179,6 +237,36 @@ public class KafkaConsumer {
 ```
 
 ---
+
+---
+
+## Advanced Testing Strategies
+
+### 🧠 ELI5: The "Car Crash Test"
+
+*   **Unit Test:** You test the **Brakes** individually on a bench. You don't need the whole car.
+*   **Test Slice (@WebMvcTest):** You test the **Dashboard** and the **Steering Wheel** together, but you use a "fake" engine (Mock).
+*   **Integration Test (@SpringBootTest):** You put the **Whole Car** together and drive it on a track to see if everything works together.
+*   **TestContainers:** Instead of driving on a "fake" track, you build a **Real Track** (real Database/Kafka) in a box (Docker) just for the test, then throw it away when you're done.
+
+### 🗺️ Mindmap: Testing Strategies
+
+```mermaid
+mindmap
+  root((Testing))
+    Unit_Tests
+      JUnit(JUnit 5)
+      Mockito(Mockito - Mocking)
+    Test_Slices
+      WebMvcTest(Web Layer Only)
+      DataJpaTest(Data Layer Only)
+    Integration_Tests
+      SpringBootTest(Full Context)
+      TestContainers(Real External Deps)
+    Tools
+      AssertJ(Fluent Assertions)
+      MockMvc(Web Testing)
+```
 
 ## Advanced Testing Strategies
 

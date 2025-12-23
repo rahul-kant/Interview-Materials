@@ -8,7 +8,10 @@
 5. [Spring Security Questions](#spring-security-questions)
 6. [Microservices Questions](#microservices-questions)
 7. [Performance & Optimization Questions](#performance--optimization-questions)
-8. [Scenario-Based Questions](#scenario-based-questions)
+8. [Modern Architecture & Trends](#modern-architecture--trends)
+9. [Troubleshooting & Performance](#troubleshooting--performance)
+10. [Scenario-Based Questions (Advanced)](#scenario-based-questions-advanced)
+11. [Scenario-Based Questions](#scenario-based-questions)
 
 ---
 
@@ -917,6 +920,65 @@ public ResponseEntity<String> uploadFile(
     return ResponseEntity.ok("File uploaded successfully");
 }
 ```
+
+---
+
+---
+
+## Modern Architecture & Trends
+
+### Q: What is Spring Modulith and when should you use it?
+**Answer**: Spring Modulith is a library that helps developers build structured **Modular Monoliths**. It allows you to define logical modules within a single application and enforces boundaries between them.
+- **Use Case**: When you want the benefits of modularity (independent development) without the operational complexity of microservices.
+- **Features**: Verification of module dependencies, event-driven interaction between modules, and automatic documentation.
+
+### Q: How do Virtual Threads (Project Loom) change Spring Boot applications?
+**Answer**: Virtual threads are lightweight threads that allow applications to handle millions of concurrent requests with minimal memory overhead.
+- **Impact**: You can now use a simple "one thread per request" model (like Tomcat) but with the scalability of reactive programming (like WebFlux).
+- **Enablement**: In Spring Boot 3.2+, just set `spring.threads.virtual.enabled=true`.
+
+### Q: What is Hexagonal Architecture (Ports and Adapters) in Spring?
+**Answer**: It's an architectural pattern that separates the core business logic (Domain) from external concerns (Database, UI, External APIs).
+- **Ports**: Interfaces defined in the core.
+- **Adapters**: Implementations of those interfaces (e.g., a JPA repository is an adapter for a Persistence port).
+- **Benefit**: Makes the core logic highly testable and independent of infrastructure.
+
+---
+
+## Troubleshooting & Performance
+
+### Q: How would you debug a memory leak in a Spring Boot application?
+**Answer**:
+1.  **Analyze Heap Dump**: Use tools like **Eclipse MAT** or **VisualVM** to find which objects are occupying most memory.
+2.  **Check Static Collections**: Look for static lists or maps that grow indefinitely.
+3.  **Check Thread Dumps**: Look for stuck threads or thread local variables not being cleared.
+4.  **Monitor GC**: Use `jstat` or Actuator metrics to see if Garbage Collection is reclaiming memory.
+
+### Q: How do you optimize a slow JPA query?
+**Answer**:
+1.  **Enable SQL Logging**: See exactly what query is being generated.
+2.  **Check for N+1**: Use `JOIN FETCH` or `EntityGraph`.
+3.  **Add Indexes**: Ensure the columns in the `WHERE` clause are indexed in the DB.
+4.  **Use Projections**: Don't fetch the whole entity if you only need 2 fields.
+5.  **Check Transaction Scope**: Ensure transactions are not held open longer than necessary.
+
+---
+
+## Scenario-Based Questions (Advanced)
+
+### Scenario: Your application is slow only during peak hours. How do you investigate?
+**Answer**:
+1.  **Check Metrics**: Look at Actuator `/metrics` for CPU, Memory, and Thread usage.
+2.  **Check Connection Pools**: Is the HikariCP pool exhausted? (Check `hikaricp.connections.pending`).
+3.  **Check External Dependencies**: Is a downstream microservice or database slow? (Check Distributed Tracing/Zipkin).
+4.  **Check GC Pauses**: Are frequent "Stop-the-world" GCs happening?
+
+### Scenario: You need to migrate a legacy Spring app to Spring Boot 3. What are the risks?
+**Answer**:
+1.  **Namespace Change**: The `javax` to `jakarta` migration is a breaking change for almost all imports.
+2.  **JDK Upgrade**: Must move to Java 17+, which might break old libraries.
+3.  **Removed Features**: `WebSecurityConfigurerAdapter` is gone; must rewrite security config.
+4.  **Third-Party Libraries**: Some older libraries might not support Jakarta EE yet.
 
 ---
 

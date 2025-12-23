@@ -9,8 +9,47 @@
 6. [Profiles](#profiles)
 7. [Embedded Servers](#embedded-servers)
 8. [Spring Boot Application Structure](#spring-boot-application-structure)
+9. [Auto-Configuration Internals (Spring Boot 3)](#auto-configuration-internals-spring-boot-3)
+10. [Custom Starters & Configuration Processor](#custom-starters--configuration-processor)
+11. [Graceful Shutdown](#graceful-shutdown)
+12. [Spring Boot 3 Migration (Jakarta EE)](#spring-boot-3-migration-jakarta-ee)
+13. [Observability with Micrometer](#observability-with-micrometer)
 
 ---
+
+## Spring Boot Fundamentals
+
+### 🧠 ELI5: The "Combo Meal"
+
+Imagine you are at a fast-food restaurant.
+
+*   **Spring Framework:** Is like buying everything separately. You have to order the bun, the patty, the lettuce, the tomato, and the fries. Then you have to assemble the burger yourself. It's flexible, but it takes a lot of time and decisions.
+*   **Spring Boot:** Is like ordering a **Combo Meal**. You just say "Number 1," and you get a pre-assembled burger, fries, and a drink. It's "opinionated" because the chef decided what goes best together, but it's much faster and easier.
+
+### 🗺️ Mindmap: Spring Boot Overview
+
+```mermaid
+mindmap
+  root((Spring Boot))
+    Core_Concepts
+      Auto_Configuration(Auto-Configuration)
+      Starters(Starters)
+      Opinionated(Opinionated Defaults)
+    Production_Ready
+      Actuator(Actuator)
+      Metrics(Metrics)
+      Health_Checks(Health Checks)
+    Deployment
+      Embedded_Servers(Embedded Servers)
+        Tomcat
+        Jetty
+        Undertow
+      Fat_Jar(Fat JAR)
+    Configuration
+      YAML_Properties(YAML/Properties)
+      Profiles(Profiles)
+      Externalized(Externalized Config)
+```
 
 ## Spring Boot Fundamentals
 
@@ -73,6 +112,35 @@ public class MyApplication {
 ```
 
 ---
+
+## Auto-Configuration
+
+### 🧠 ELI5: The "Magic Smart Home"
+
+Imagine you move into a **Smart Home**.
+
+1.  **Detection**: The house senses you've walked into the kitchen (it sees `spring-boot-starter-web` on the classpath).
+2.  **Action**: It automatically turns on the lights and starts the coffee maker (it configures Tomcat and Spring MVC).
+3.  **Override**: If you manually turn off the coffee maker and start your own French Press (you define your own `Bean`), the house says, "Oh, I see you've got this covered," and stays out of your way.
+
+### 🗺️ Mindmap: Auto-Configuration
+
+```mermaid
+graph TD
+    Start((Start App)) --> Scan[1. Scan Classpath]
+    Scan --> CondClass{Class Exists?}
+    CondClass -- Yes --> CondBean{Bean Exists?}
+    CondBean -- No --> Config[2. Apply Auto-Config]
+    CondBean -- Yes --> Skip[3. Skip - User Defined]
+    CondClass -- No --> Skip
+    Config --> End((Context Ready))
+
+    subgraph "Key Annotations"
+    A1[@ConditionalOnClass]
+    A2[@ConditionalOnMissingBean]
+    A3[@ConditionalOnProperty]
+    end
+```
 
 ## Auto-Configuration
 
@@ -207,6 +275,36 @@ java -jar myapp.jar --debug
 - 🔧 Unconditional classes
 
 ---
+
+## Spring Boot Starters
+
+### 🧠 ELI5: The "Toolbox"
+
+Imagine you want to do some **Gardening**.
+
+*   **Without Starters:** You have to go to the store and buy a shovel, a rake, seeds, soil, and gloves individually. You might forget something important.
+*   **With Starters:** You buy the **"Gardening Starter Kit."** It comes with everything you need in one box. If you want to do **"Painting,"** you just grab the "Painting Starter Kit." You don't have to worry about the individual tools; the kit has you covered.
+
+### 🗺️ Mindmap: Starters
+
+```mermaid
+mindmap
+  root((Starters))
+    Web(spring-boot-starter-web)
+      MVC
+      Tomcat
+      JSON
+    Data(spring-boot-starter-data-jpa)
+      Hibernate
+      HikariCP
+    Security(spring-boot-starter-security)
+      Auth
+      Encryption
+    Test(spring-boot-starter-test)
+      JUnit
+      Mockito
+      AssertJ
+```
 
 ## Spring Boot Starters
 
@@ -486,6 +584,37 @@ public class AppConfig {
 ```
 
 ---
+
+## Spring Boot Actuator
+
+### 🧠 ELI5: The "Car Dashboard"
+
+When you drive a car, you don't need to look under the hood every minute to see if the engine is okay. You just look at the **Dashboard**.
+
+*   **Health Check (`/health`):** Is like the "Check Engine" light. If it's green, you're good.
+*   **Metrics (`/metrics`):** Is like the Speedometer or Fuel Gauge. It tells you how fast you're going and how much "gas" (memory/CPU) you have left.
+*   **Info (`/info`):** Is like the Car's Manual or VIN number. It tells you what version of the car you're driving.
+
+### 🗺️ Mindmap: Actuator
+
+```mermaid
+mindmap
+  root((Actuator))
+    Endpoints
+      Health(Health)
+      Info(Info)
+      Metrics(Metrics)
+      Env(Environment)
+      Loggers(Loggers)
+      Mappings(Mappings)
+    Customization
+      HealthIndicators(Custom Health)
+      InfoContributors(Custom Info)
+      Micrometer(Custom Metrics)
+    Security
+      Exposure(Include/Exclude)
+      Protection(Spring Security)
+```
 
 ## Spring Boot Actuator
 
@@ -1071,6 +1200,113 @@ public class ActuatorSecurity extends WebSecurityConfigurerAdapter {
     }
 }
 ```
+
+---
+
+## Auto-Configuration Internals (Spring Boot 3)
+
+### The New Registration Mechanism
+In Spring Boot 3, the way auto-configurations are registered has changed.
+
+- **Old Way (Spring Boot 2.x)**: Registered in `META-INF/spring.factories` under the key `org.springframework.boot.autoconfigure.EnableAutoConfiguration`.
+- **New Way (Spring Boot 3.x)**: Registered in a new file: `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`.
+
+**Format of `.imports` file**:
+Each line is a fully qualified class name of an auto-configuration class.
+```text
+com.example.MyAutoConfiguration
+com.example.AnotherAutoConfiguration
+```
+
+### AutoConfigurationImportSelector
+This is the core class that:
+1.  Scans the `.imports` files.
+2.  Filters out configurations based on `@Conditional` annotations.
+3.  Determines the order using `@AutoConfigureAfter`, `@AutoConfigureBefore`, and `@AutoConfigureOrder`.
+
+---
+
+## Custom Starters & Configuration Processor
+
+### Why use `spring-boot-configuration-processor`?
+When you create a custom starter, you want IDE support (auto-completion) for your properties in `application.yml`.
+
+**How it works**:
+1.  Add the dependency to your starter:
+    ```xml
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-configuration-processor</artifactId>
+        <optional>true</optional>
+    </dependency>
+    ```
+2.  During compilation, it generates a `META-INF/spring-configuration-metadata.json` file.
+3.  IDEs read this file to provide tooltips and auto-completion.
+
+---
+
+## Graceful Shutdown
+
+### What is Graceful Shutdown?
+It allows the application to finish processing active requests before shutting down, instead of killing them immediately.
+
+### Configuration
+```yaml
+server:
+  shutdown: graceful # Options: immediate (default), graceful
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s # Time to wait for requests to finish
+```
+
+**How it works**:
+1.  The server stops accepting new requests.
+2.  The server waits for a "grace period" for active requests to complete.
+3.  If requests don't finish within the timeout, the server kills them and shuts down.
+
+---
+
+## Spring Boot 3 Migration (Jakarta EE)
+
+### The Namespace Change
+The biggest change in Spring Boot 3 is the migration from **Java EE** to **Jakarta EE**.
+- All `javax.*` imports for web and persistence are now `jakarta.*`.
+- Example: `javax.persistence.Entity` → `jakarta.persistence.Entity`.
+- Example: `javax.servlet.http.HttpServlet` → `jakarta.servlet.http.HttpServlet`.
+
+### Key Migration Steps
+1.  **Java 17+**: Upgrade your JDK.
+2.  **Dependency Updates**: Many libraries changed their group IDs or versions to support Jakarta EE (e.g., Hibernate 6, Jetty 11).
+3.  **Property Changes**: Some properties were renamed (e.g., `spring.redis.*` → `spring.data.redis.*`).
+
+---
+
+## Observability with Micrometer
+
+### Beyond Actuator
+Spring Boot 3 introduces a new "Observability" API built on **Micrometer**. It combines metrics and tracing into a single abstraction.
+
+### Key Components
+1.  **ObservationRegistry**: The central point for recording observations.
+2.  **ObservationHandler**: Decides what to do with an observation (e.g., send to Zipkin, log it, or update a counter).
+
+### Setup for Tracing
+```xml
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-tracing-bridge-otel</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.opentelemetry</groupId>
+    <artifactId>opentelemetry-exporter-zipkin</artifactId>
+</dependency>
+```
+
+**Benefits**:
+- Unified API for metrics and traces.
+- Better performance than the old Spring Cloud Sleuth.
+- Native support for OpenTelemetry.
 
 ---
 

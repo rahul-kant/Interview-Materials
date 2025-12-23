@@ -8,9 +8,46 @@
 5. [Validation](#validation)
 6. [Exception Handling](#exception-handling)
 7. [API Documentation](#api-documentation)
-8. [Best Practices](#best-practices)
+8. [Problem Details (RFC 7807)](#problem-details-rfc-7807)
+9. [Async REST: DeferredResult vs WebClient](#async-rest-deferredresult-vs-webclient)
+10. [Filters vs Interceptors](#filters-vs-interceptors)
+11. [HTTP Interface Clients (Spring 6)](#http-interface-clients-spring-6)
+12. [Best Practices](#best-practices)
 
 ---
+
+## REST Fundamentals
+
+### 🧠 ELI5: The "Universal Remote Control"
+
+Imagine you have a **Universal Remote Control** that works for every TV in the world.
+
+*   **Uniform Interface:** No matter which TV you use, the "Volume Up" button always does the same thing. You don't need a different remote for every brand.
+*   **Stateless:** The TV doesn't need to remember what you did 5 minutes ago. Every time you press a button, the remote sends the *entire* command (e.g., "Set Volume to 20").
+*   **Resources:** Every channel has a unique number (URI). If you want to watch Channel 5, you just go to `/channel/5`.
+
+### 🗺️ Mindmap: REST Principles
+
+```mermaid
+mindmap
+  root((REST Principles))
+    Client_Server(Client-Server)
+      Separation(Separation of Concerns)
+    Stateless(Statelessness)
+      No_Session(No Server-side Session)
+      Self_Contained(Self-contained Requests)
+    Cacheable(Cacheability)
+      Performance(Improved Performance)
+      Headers(Cache-Control Headers)
+    Uniform_Interface(Uniform Interface)
+      Identification(Resource Identification - URI)
+      Manipulation(Manipulation via Representations)
+      Self_Descriptive(Self-descriptive Messages)
+      HATEOAS(HATEOAS)
+    Layered_System(Layered System)
+      Proxies(Proxies/Gateways)
+      Security(Security Layers)
+```
 
 ## REST Fundamentals
 
@@ -59,6 +96,41 @@
 - `503 Service Unavailable` - Server temporarily unavailable
 
 ---
+
+## Spring MVC Architecture
+
+### 🧠 ELI5: The "Restaurant Workflow"
+
+Imagine a busy **Restaurant**.
+
+1.  **Valet (DispatcherServlet):** The first person you see. He takes your keys (request) and directs you where to go.
+2.  **Hostess (HandlerMapping):** She looks at the reservation book and decides which table (Controller) is right for you.
+3.  **Waiter (HandlerAdapter):** He takes your order and brings it to the chef. He knows *how* to talk to the chef.
+4.  **Chef (Controller):** He actually cooks the food (Business Logic).
+5.  **Platter (ModelAndView/ResponseEntity):** The food is put on a nice plate to be served back to you.
+
+### 🗺️ Mindmap: Spring MVC Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant DS as DispatcherServlet
+    participant HM as HandlerMapping
+    participant HA as HandlerAdapter
+    participant CTRL as Controller
+    participant VR as ViewResolver
+
+    C->>DS: 1. HTTP Request
+    DS->>HM: 2. Find Handler
+    HM-->>DS: 3. Return Handler
+    DS->>HA: 4. Invoke Handler
+    HA->>CTRL: 5. Execute Logic
+    CTRL-->>HA: 6. Return Data
+    HA-->>DS: 7. Return ModelAndView
+    DS->>VR: 8. Resolve View (if needed)
+    VR-->>DS: 9. Return View
+    DS-->>C: 10. HTTP Response
+```
 
 ## Spring MVC Architecture
 
@@ -532,6 +604,34 @@ public UserDTO updateUser(
 
 ## Exception Handling
 
+### 🧠 ELI5: The "Safety Net"
+
+Imagine you are a **Trapeze Artist** in a circus.
+
+*   **Normal Flow:** You jump from one bar to another (successful API call).
+*   **Exception:** You miss the bar and fall (an error occurs).
+*   **@ExceptionHandler:** Is like a **Safety Net** specifically placed for *one* type of fall (e.g., a net just for "slipping").
+*   **@ControllerAdvice:** Is like a **Giant Safety Net** that covers the *entire* circus floor. No matter where you fall from, this net will catch you and make sure you land safely (returns a nice JSON error instead of a scary 500 page).
+
+### 🗺️ Mindmap: Exception Handling
+
+```mermaid
+mindmap
+  root((Exception Handling))
+    Levels
+      Method_Level(@ExceptionHandler in Controller)
+      Global_Level(@ControllerAdvice / @RestControllerAdvice)
+    Response_Types
+      ResponseEntity(Custom Body + Status)
+      ResponseStatus(@ResponseStatus)
+      ProblemDetail(RFC 7807 - Spring 6)
+    Key_Classes
+      ResponseEntityExceptionHandler(Base Class)
+      ErrorResponse(Custom DTO)
+```
+
+## Exception Handling
+
 ### Global Exception Handler
 
 ```java
@@ -810,6 +910,129 @@ public class UserDTO {
 ```
 http://localhost:8080/swagger-ui/index.html
 http://localhost:8080/v3/api-docs
+```
+
+---
+
+---
+
+## Problem Details (RFC 7807)
+
+### What is Problem Details?
+RFC 7807 is a standard for machine-readable error responses in HTTP APIs. Spring Boot 3 provides native support for this.
+
+### Enabling Problem Details
+```yaml
+spring:
+  mvc:
+    problemdetails:
+      enabled: true
+```
+
+### Usage in Controller
+```java
+@GetMapping("/{id}")
+public User getUser(@PathVariable Long id) {
+    if (id < 0) {
+        throw new ErrorResponseException(HttpStatus.BAD_REQUEST, 
+            ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "ID must be positive"), null);
+    }
+    return userService.findById(id);
+}
+```
+
+**Response Format**:
+```json
+{
+  "type": "about:blank",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "ID must be positive",
+  "instance": "/api/users/-1"
+}
+```
+
+---
+
+## Async REST: DeferredResult vs WebClient
+
+### 1. DeferredResult (Server-Side Async)
+Used when a request takes a long time to process (e.g., waiting for an external event). It releases the container thread while waiting.
+
+```java
+@GetMapping("/async-task")
+public DeferredResult<ResponseEntity<?>> executeAsyncTask() {
+    DeferredResult<ResponseEntity<?>> output = new DeferredResult<>(5000L);
+    
+    executorService.submit(() -> {
+        // Long running task
+        output.setResult(ResponseEntity.ok("Task Complete"));
+    });
+    
+    return output;
+}
+```
+
+### 2. WebClient (Client-Side Non-Blocking)
+The modern replacement for `RestTemplate`. It is non-blocking and supports reactive streams.
+
+```java
+public Mono<User> getUser(Long id) {
+    return webClient.get()
+        .uri("/users/{id}", id)
+        .retrieve()
+        .bodyToMono(User.class);
+}
+```
+
+### RestTemplate vs WebClient
+| Feature | RestTemplate | WebClient |
+|---------|--------------|-----------|
+| **Model** | Blocking (one thread per request) | Non-blocking (reactive) |
+| **Status** | Maintenance Mode | Active Development |
+| **Dependencies** | Spring Web | Spring WebFlux |
+
+---
+
+## Filters vs Interceptors
+
+| Feature | Filter (Servlet API) | Interceptor (Spring MVC) |
+|---------|----------------------|--------------------------|
+| **Origin** | Part of Servlet Container | Part of Spring Framework |
+| **Scope** | All requests (even non-Spring) | Only requests handled by DispatcherServlet |
+| **Context** | No access to Spring Context (usually) | Full access to Spring Context & Handler |
+| **Methods** | `doFilter()` | `preHandle()`, `postHandle()`, `afterCompletion()` |
+| **Use Case** | Logging, Security, CORS, GZIP | Auth checks, Locale changes, Logging handler info |
+
+---
+
+## HTTP Interface Clients (Spring 6)
+
+Spring 6 allows defining HTTP clients using Java interfaces, similar to Feign or Retrofit.
+
+### 1. Define the Interface
+```java
+public interface UserClient {
+    @GetExchange("/users/{id}")
+    User getUser(@PathVariable Long id);
+    
+    @PostExchange("/users")
+    User createUser(@RequestBody User user);
+}
+```
+
+### 2. Create the Proxy
+```java
+@Configuration
+public class ClientConfig {
+    @Bean
+    public UserClient userClient(WebClient.Builder builder) {
+        WebClient webClient = builder.baseUrl("https://api.example.com").build();
+        HttpServiceProxyFactory factory = HttpServiceProxyFactory
+            .builder(WebClientAdapter.forClient(webClient)).build();
+        return factory.createClient(UserClient.class);
+    }
+}
 ```
 
 ---

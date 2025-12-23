@@ -7,10 +7,45 @@
 4. [Bean Scopes](#bean-scopes)
 5. [Configuration Types](#configuration-types)
 6. [Common Annotations](#common-annotations)
+7. [Spring Expression Language (SpEL)](#spring-expression-language-spel)
+8. [Circular Dependencies](#circular-dependencies)
+9. [Spring AOP Internals](#spring-aop-internals)
+10. [Extension Points: BPP vs BFPP](#extension-points-bpp-vs-bfpp)
+11. [Spring 6 & Java 17+ Features](#spring-6--java-17-features)
 
 ---
 
 ## Dependency Injection & Inversion of Control
+
+### 🧠 ELI5: The "Don't Call Us, We'll Call You" Principle
+
+Imagine you are a **Chef** in a kitchen.
+
+*   **Traditional Way (No IoC):** You have to go out, buy the stove, find the ingredients, and build your own fridge. You are in control of *everything*, but you're too busy building things to actually cook.
+*   **IoC Way:** You just show up at a fully equipped kitchen. The stove is there, the fridge is stocked, and the ingredients are delivered to your station. You don't care *how* they got there; you just focus on cooking. **Spring is the Kitchen Manager** who sets everything up for you.
+
+### 🗺️ Mindmap: IoC & DI Overview
+
+```mermaid
+mindmap
+  root((IoC & DI))
+    IoC(Inversion of Control)
+      Principle("Don't call us, we'll call you")
+      Goal(Loose Coupling)
+      Manager(Spring Container)
+    DI(Dependency Injection)
+      Constructor(Constructor Injection)
+        style Constructor color:#00ff00
+        Final(Final Fields)
+        Testing(Easy to Mock)
+      Setter(Setter Injection)
+        Optional(Optional Deps)
+        Changeable(Changeable at Runtime)
+      Field(Field Injection)
+        style Field color:#ff0000
+        Reflection(Uses Reflection)
+        Testing(Hard to Test)
+```
 
 ### What is Inversion of Control (IoC)?
 
@@ -124,6 +159,36 @@ public class ProductService {
 
 ## Spring Container
 
+### 🧠 ELI5: The "Smart Warehouse"
+
+Think of the Spring Container as a **Smart Warehouse**.
+
+1.  **Inventory List**: You give it a list of things you need (Configuration/Annotations).
+2.  **Assembly Line**: It knows how to build each item and what parts (dependencies) it needs.
+3.  **Delivery**: When you ask for a "Service," it doesn't just give you the code; it gives you a fully assembled, ready-to-use machine.
+
+### 🗺️ Mindmap: Spring Container
+
+```mermaid
+mindmap
+  root((Spring Container))
+    Types
+      BeanFactory
+        Lazy(Lazy Loading)
+        Lightweight(Resource Constrained)
+      ApplicationContext
+        Eager(Eager Loading)
+        Features
+          I18n(Internationalization)
+          Events(Event Publication)
+          AOP(AOP Integration)
+    Responsibilities
+      Creation(Bean Creation)
+      Wiring(Dependency Injection)
+      Lifecycle(Lifecycle Management)
+      Config(Configuration Management)
+```
+
 ### What is Spring Container?
 
 The Spring Container is responsible for:
@@ -193,6 +258,38 @@ ApplicationContext ctx = new FileSystemXmlApplicationContext("/path/to/config.xm
 ---
 
 ## Bean Lifecycle
+
+### 🧠 ELI5: The "Employee Onboarding"
+
+Think of a Spring Bean as a **New Employee** joining a company:
+
+1.  **Hiring (Instantiation)**: The person is hired (Object created).
+2.  **Desk Setup (Populate Properties)**: They get a laptop, desk, and email (Dependencies injected).
+3.  **Orientation (Aware Interfaces)**: They learn their name and who their manager is.
+4.  **Training (@PostConstruct)**: They attend a "Welcome" workshop to prepare for work.
+5.  **Working (Ready to Use)**: They are now doing their job.
+6.  **Retirement (@PreDestroy)**: Before they leave, they return the laptop and keys (Cleanup).
+
+### 🗺️ Mindmap: Bean Lifecycle
+
+```mermaid
+graph TD
+    Start((Start)) --> Inst[1. Instantiation]
+    Inst --> Pop[2. Populate Properties]
+    Pop --> Aware[3. Aware Interfaces]
+    Aware --> BPP_Before[4. BPP BeforeInit]
+    BPP_Before --> PostConstruct[5. @PostConstruct]
+    PostConstruct --> InitBean[6. afterPropertiesSet]
+    InitBean --> CustomInit[7. Custom Init]
+    CustomInit --> BPP_After[8. BPP AfterInit]
+    BPP_After --> Ready((Bean Ready))
+    Ready --> PreDestroy[9. @PreDestroy]
+    PreDestroy --> Disposable[10. DisposableBean]
+    Disposable --> CustomDestroy[11. Custom Destroy]
+    CustomDestroy --> End((End))
+
+    style Ready fill:#f9f,stroke:#333,stroke-width:4px
+```
 
 ### Complete Bean Lifecycle
 
@@ -306,6 +403,33 @@ public class MyBean implements ApplicationContextAware, BeanNameAware {
 ---
 
 ## Bean Scopes
+
+### 🧠 ELI5: The "Coffee Shop"
+
+*   **Singleton (Default):** Like the **Espresso Machine**. There's only one in the shop, and everyone shares it.
+*   **Prototype:** Like a **Coffee Cup**. Every time someone orders, they get a brand new cup just for them.
+*   **Request:** Like a **WiFi Password**. It's only valid for your current visit (one HTTP request).
+*   **Session:** Like a **Loyalty Card**. It stays with you as long as you are "logged in" to that specific shop.
+
+### 🗺️ Mindmap: Bean Scopes
+
+```mermaid
+mindmap
+  root((Bean Scopes))
+    Standard
+      Singleton
+        Default(Default)
+        One(One per Container)
+        Shared(Shared Instance)
+      Prototype
+        New(New per Request)
+        Lifecycle(Not fully managed)
+    Web_Only
+      Request(One per HTTP Request)
+      Session(One per HTTP Session)
+      Application(One per ServletContext)
+      WebSocket(One per WebSocket)
+```
 
 ### Available Scopes
 
@@ -642,6 +766,167 @@ ExpressionParser parser = new SpelExpressionParser();
 Expression exp = parser.parseExpression("'Hello World'.concat('!')");
 String message = (String) exp.getValue();
 ```
+
+---
+
+## Circular Dependencies
+
+### What is a Circular Dependency?
+A circular dependency occurs when Bean A depends on Bean B, and Bean B depends on Bean A.
+
+```java
+@Component
+public class A {
+    private final B b;
+    public A(B b) { this.b = b; }
+}
+
+@Component
+public class B {
+    private final A a;
+    public B(A a) { this.a = a; }
+}
+```
+
+### How Spring Handles It (The 3-Level Cache)
+Spring's `DefaultSingletonBeanRegistry` uses three maps to manage singleton beans:
+
+1.  **singletonObjects (1st level)**: Fully initialized beans.
+2.  **earlySingletonObjects (2nd level)**: Partially initialized beans (instantiated but properties not yet injected).
+3.  **singletonFactories (3rd level)**: Object factories for beans that might need to be wrapped in a proxy (like AOP).
+
+**The Flow**:
+1.  Spring tries to create Bean A. It puts a factory for A in the **3rd level cache**.
+2.  Spring sees A needs B. It tries to create B.
+3.  Spring sees B needs A. It checks the caches.
+4.  It finds the factory for A in the **3rd level cache**, creates an "early reference" to A, and puts it in the **2nd level cache**.
+5.  B is injected with the early reference to A and completes its initialization.
+6.  B is put in the **1st level cache**.
+7.  A is injected with the fully initialized B and completes its initialization.
+
+> [!IMPORTANT]
+> This mechanism only works for **Setter Injection**. Constructor injection fails because the object cannot even be instantiated to be put in the 3rd level cache.
+
+### Solutions for Circular Dependencies
+1.  **Redesign (Best)**: Extract shared logic into a third bean.
+2.  **@Lazy**: Tells Spring to inject a proxy instead of the real bean. The real bean is resolved only when first used.
+    ```java
+    public A(@Lazy B b) { this.b = b; }
+    ```
+3.  **Setter Injection**: Allows Spring to use the 3-level cache mechanism.
+
+---
+
+## Spring AOP Internals
+
+### 🧠 ELI5: The "Security Guard"
+
+Imagine you have a **Bank Vault** (your Business Logic).
+
+*   **Without AOP:** Every time you want to open the vault, you have to manually write code to: 1. Log who is entering, 2. Check their ID, 3. Open the door, 4. Log when they leave.
+*   **With AOP:** You just focus on the "Open the door" part. You hire a **Security Guard** (Aspect) who stands *outside* the vault. He automatically logs people and checks IDs *before* they even touch the door. You don't have to change the vault's design at all!
+
+### 🗺️ Mindmap: Spring AOP
+
+```mermaid
+mindmap
+  root((Spring AOP))
+    Concepts
+      Aspect(The Module - Guard)
+      Advice(The Action - What to do)
+      JoinPoint(The Point - Where to act)
+      Pointcut(The Filter - Which methods)
+      Weaving(The Process - Connecting)
+    Proxies
+      JDK_Dynamic(Interfaces only)
+      CGLIB(Subclassing - Default)
+    Advice_Types
+      Before
+      After
+      Around(Most Powerful)
+      AfterReturning
+      AfterThrowing
+```
+
+### JDK Dynamic Proxy vs CGLIB
+Spring AOP uses two types of proxying mechanisms:
+
+| Feature | JDK Dynamic Proxy | CGLIB (Code Generation Library) |
+|---------|-------------------|-------------------------------|
+| **Requirement** | Must implement at least one interface | Can proxy classes (no interface needed) |
+| **Mechanism** | Uses `java.lang.reflect.Proxy` | Uses bytecode generation (subclassing) |
+| **Performance** | Faster to create, slightly slower to invoke | Slower to create, faster to invoke |
+| **Final Methods** | Not an issue | Cannot proxy `final` methods/classes |
+| **Default in Spring** | If interfaces exist | Default in Spring Boot 2.x+ |
+
+### The Self-Invocation Issue
+A common pitfall in Spring AOP (and `@Transactional`) is self-invocation.
+
+```java
+@Service
+public class MyService {
+    public void outerMethod() {
+        innerMethod(); // ❌ AOP/Transaction will NOT trigger
+    }
+
+    @Transactional
+    public void innerMethod() { ... }
+}
+```
+
+**Why?**
+AOP works by wrapping your bean in a **Proxy**. When you call `outerMethod()` from another bean, you call it on the proxy. But when `outerMethod()` calls `innerMethod()` internally, it uses `this.innerMethod()`, bypassing the proxy.
+
+**Solutions**:
+1.  **Move to another bean**: The most clean solution.
+2.  **Self-Injection**: Inject `MyService` into itself (requires `@Lazy`).
+3.  **AopContext**: Use `((MyService) AopContext.currentProxy()).innerMethod()`.
+
+---
+
+## Extension Points: BPP vs BFPP
+
+### BeanPostProcessor (BPP)
+Operates on **Bean Instances**.
+- `postProcessBeforeInitialization`: Called before `@PostConstruct`.
+- `postProcessAfterInitialization`: Called after `afterPropertiesSet`.
+- **Use Case**: Creating proxies (AOP), checking for annotations, modifying bean state.
+
+### BeanFactoryPostProcessor (BFPP)
+Operates on **Bean Definitions**.
+- Called after all bean definitions are loaded but **before** any beans are instantiated.
+- **Use Case**: Reading property files (`PropertySourcesPlaceholderConfigurer`), modifying bean scopes or metadata.
+
+---
+
+## Spring 6 & Java 17+ Features
+
+### 1. Java 17 Baseline
+Spring 6 requires Java 17 as a minimum. This allows using:
+- **Records**: Can be used as DTOs or even Spring Beans.
+- **Sealed Classes**: Useful for defining restricted hierarchies in domain models.
+- **Text Blocks**: Cleaner SQL or JSON strings in `@Value` or `@Query`.
+
+### 2. Declarative HTTP Interfaces
+Similar to Feign, you can now define HTTP clients using interfaces.
+```java
+public interface UserClient {
+    @GetExchange("/users/{id}")
+    User getUser(@PathVariable Long id);
+}
+```
+
+### 3. Problem Details (RFC 7807)
+Standardized error responses for APIs.
+```java
+@RestControllerAdvice
+public class GlobalHandler extends ResponseEntityExceptionHandler {
+    // Spring 6 provides native support via ProblemDetail class
+}
+```
+
+### 4. Micrometer Observability
+Spring 6 integrates Micrometer directly into the framework for tracing and metrics, replacing the old Spring Cloud Sleuth.
 
 ---
 

@@ -12,14 +12,20 @@ This roadmap covers the essential topics for Spring and Spring Boot interviews, 
   - ApplicationContext vs BeanFactory
 - [x] **Bean Lifecycle**
   - @PostConstruct, @PreDestroy
-  - BeanPostProcessor
+  - BeanPostProcessor vs BeanFactoryPostProcessor
 - [x] **Bean Scopes**
-  - Singleton, Prototype, Request, Session, GlobalSession
+  - Singleton, Prototype, Request, Session
 - [x] **Configuration**
   - Java-based (@Configuration, @Bean)
   - Annotation-based (@Component, @Service, @Repository, @Controller)
-  - XML-based (Legacy)
 - [x] **SpEL (Spring Expression Language)**
+- [x] **Circular Dependencies**
+  - 3-Level Cache Mechanism
+- [x] **Spring AOP Internals**
+  - JDK Dynamic Proxy vs CGLIB
+  - Self-invocation issues
+- [x] **Spring 6 & Java 17+ Features**
+  - Records, Sealed Classes, Text Blocks
 
 ### Week 3-4: Spring Boot Essentials
 **File**: [03-Spring-Boot-Essentials.md](03-Spring-Boot-Essentials.md)
@@ -27,74 +33,77 @@ This roadmap covers the essential topics for Spring and Spring Boot interviews, 
 - [x] **Auto-Configuration**
   - @EnableAutoConfiguration
   - @Conditional annotations
+  - **Auto-config Internals (Spring Boot 3)**
 - [x] **Spring Boot Starters**
   - How they work
-  - Common starters (web, data-jpa, security, test)
+  - **Custom Starters & Configuration Processor**
 - [x] **Configuration Management**
   - application.properties vs application.yml
   - @Value vs @ConfigurationProperties
   - Profiles (Dev, Test, Prod)
 - [x] **Spring Boot Actuator**
   - Endpoints (health, metrics, info)
-  - Custom health indicators
+  - **Observability with Micrometer**
 - [x] **Spring Boot CLI**
-- [x] **DevTools**
+- [x] **Graceful Shutdown**
+- [x] **Spring Boot 3 Migration (Jakarta EE)**
 
 ### Week 5-6: Web Development & REST APIs
 **File**: [04-REST-API-Development.md](04-REST-API-Development.md)
 
 - [x] **Spring MVC Architecture**
   - DispatcherServlet
-  - HandlerMapping, ViewResolver
+  - **Filters vs Interceptors**
 - [x] **REST Controllers**
   - @RestController vs @Controller
   - @RequestMapping, @GetMapping, @PostMapping, etc.
-  - @RequestBody, @ResponseBody, @PathVariable, @RequestParam
 - [x] **Exception Handling**
-  - @ExceptionHandler
-  - @ControllerAdvice / @RestControllerAdvice
+  - @ExceptionHandler, @RestControllerAdvice
+  - **Problem Details (RFC 7807)**
 - [x] **Validation**
-  - JSR-303/JSR-380 (Hibernate Validator)
-  - @Valid, @Validated
+  - JSR-303/JSR-380
 - [x] **API Documentation**
   - OpenAPI / Swagger (SpringDoc)
-- [x] **HATEOAS**
-- [x] **RestTemplate & WebClient**
+- [x] **Async REST**
+  - DeferredResult vs WebClient
+- [x] **HTTP Interface Clients (Spring 6)**
 
 ### Week 7-8: Data Access Layer
 **File**: [05-Spring-Data-JPA.md](05-Spring-Data-JPA.md)
 
 - [x] **JPA & Hibernate**
-  - Entity mapping (@Entity, @Table, @Id, @Column)
-  - Relationships (@OneToOne, @OneToMany, @ManyToOne, @ManyToMany)
+  - Entity mapping, Relationships
   - Fetch Types (Lazy vs Eager)
-  - Cascade Types
+  - **N+1 Problem: Deep Dive & Solutions**
+  - **Hibernate Caching (L1 & L2)**
 - [x] **Spring Data Repositories**
-  - JpaRepository, CrudRepository
-  - Query Methods (findBy...)
-  - @Query (JPQL, Native SQL)
+  - JpaRepository, Query Methods, @Query
 - [x] **Transaction Management**
   - @Transactional (Propagation, Isolation, Rollback)
+  - **Transaction Pitfalls & Rollback Rules**
+- [x] **Locking Strategies**
+  - Optimistic vs Pessimistic Locking
 - [x] **Database Migrations**
   - Flyway / Liquibase
+- [x] **Soft Deletes with @SQLDelete**
 - [x] **Caching**
-  - Spring Cache Abstraction
-  - Redis integration
+  - Spring Cache Abstraction, Redis
 
 ### Week 9: Security
 **File**: [06-Spring-Security.md](06-Spring-Security.md)
 
 - [x] **Authentication vs Authorization**
 - [x] **Spring Security Architecture**
-  - SecurityContext, AuthenticationManager, UserDetailsService
+  - SecurityContext, AuthenticationManager
+  - **Security Filter Chain Internals**
 - [x] **Configuration**
-  - SecurityFilterChain
-  - HttpSecurity
+  - SecurityFilterChain (Spring Security 6)
+  - **Migration from WebSecurityConfigurerAdapter**
 - [x] **Authentication Types**
-  - Basic Auth
-  - Form Login
-  - JWT (JSON Web Tokens)
-  - OAuth2 / OIDC
+  - Basic Auth, Form Login, JWT
+  - **JWT Refresh Token Rotation**
+  - OAuth2 / OIDC + **PKCE**
+- [x] **CSRF & CORS Deep Dive**
 - [x] **Method Security**
   - @PreAuthorize, @Secured
 
@@ -129,19 +138,49 @@ This roadmap covers the essential topics for Spring and Spring Boot interviews, 
   - GraalVM
 
 ### Week 12: System Design & Best Practices
-  - Singleton pattern (Beans)
-  - Factory pattern (BeanFactory)
-  - Proxy pattern (AOP)
-  - Template method pattern (JdbcTemplate, RestTemplate)
-  - Observer pattern (ApplicationEvent)
+**File**: [10-System-Design-and-Best-Practices.md](10-System-Design-and-Best-Practices.md)
 
-- [ ] **Production Readiness**
+- [x] **Design Patterns in Spring**
+  - Singleton, Factory, Proxy, Template Method, Observer
+- [x] **Performance Optimization**
+  - Connection Pooling (HikariCP)
+  - Async Processing (@Async)
+  - JVM Tuning (G1GC, ZGC)
+- [x] **Production Readiness**
   - Logging (SLF4J, Logback)
-  - Monitoring (Actuator, Prometheus, Grafana)
-  - Health checks
   - Graceful shutdown
   - Docker containerization
-  - Kubernetes deployment
+- [x] **API Versioning**
+- [x] **Memory Management**
+
+### Week 13: Spring Boot 3 & Advanced Security
+**Files**: [12-Spring-Boot-3-and-Spring-6.md](12-Spring-Boot-3-and-Spring-6.md), [13-Advanced-Security-Patterns.md](13-Advanced-Security-Patterns.md)
+
+- [x] **Spring Boot 3.x Features**
+  - Virtual Threads (Java 21)
+  - HTTP Interfaces
+  - Problem Details API
+- [x] **Advanced Security**
+  - OAuth2 / OIDC Deep Dive
+  - PKCE
+  - JWT Best Practices
+
+### Week 14: Cloud Native & Kubernetes
+**File**: [14-Cloud-Native-and-Kubernetes.md](14-Cloud-Native-and-Kubernetes.md)
+
+- [x] **Kubernetes Integration**
+  - Liveness & Readiness Probes
+  - ConfigMaps & Secrets
+  - Helm Charts
+- [x] **Service Mesh Concepts**
+
+### Week 15: Testing Deep Dive
+**File**: [15-Testing-Deep-Dive.md](15-Testing-Deep-Dive.md)
+
+- [x] **Advanced Testing**
+  - Consumer-Driven Contract Testing
+  - Mutation Testing (PITest)
+  - Architecture Testing (ArchUnit)
 
 ## 📊 Priority Matrix
 
@@ -215,9 +254,10 @@ This roadmap covers the essential topics for Spring and Spring Boot interviews, 
 - [ ] Can explain DI/IoC with examples
 - [ ] Understand Spring Boot auto-configuration
 - [ ] Built a complete REST API with CRUD operations
-- [ ] Implemented Spring Security with JWT
-- [ ] Created microservices with Spring Cloud
-- [ ] Practiced database optimization techniques
+- [ ] Implemented Spring Security with JWT & OAuth2
+- [ ] Created microservices with Spring Cloud & Saga pattern
+- [ ] Practiced database optimization (Entity Graphs, Projections)
+- [ ] Understand Spring Boot 3 features (Virtual Threads)
 - [ ] Reviewed common design patterns
 - [ ] Prepared questions about the company's tech stack
 - [ ] Practiced coding on whiteboard/online editor

@@ -8,9 +8,47 @@
 5. [Query Methods](#query-methods)
 6. [Transactions](#transactions)
 7. [Performance Optimization](#performance-optimization)
-8. [Common Issues](#common-issues)
+8. [Entity Graphs](#entity-graphs)
+9. [Projections](#projections)
+10. [JPA Auditing](#jpa-auditing)
+11. [Transaction Pitfalls & Rollback Rules](#transaction-pitfalls--rollback-rules)
+12. [Hibernate Caching (1st & 2nd Level)](#hibernate-caching-1st--2nd-level)
+13. [Optimistic vs Pessimistic Locking](#optimistic-vs-pessimistic-locking)
+14. [Soft Deletes with @SQLDelete](#soft-deletes-with-sqldelete)
+15. [N+1 Problem: Deep Dive & Solutions](#n1-problem-deep-dive--solutions)
+16. [Common Issues](#common-issues)
 
 ---
+
+## JPA Fundamentals
+
+### 🧠 ELI5: The "Translator"
+
+Imagine you speak **English** (Java Objects), but your friend only speaks **French** (SQL/Database).
+
+*   **JPA:** Is the **Dictionary**. It defines the rules for how words should be translated.
+*   **Hibernate:** Is the **Translator**. He is the person who actually listens to your English and speaks French to your friend.
+*   **Spring Data JPA:** Is like a **Smart Assistant**. You don't even have to talk to the translator. You just show the assistant a picture of what you want, and it handles the rest.
+
+### 🗺️ Mindmap: JPA Architecture
+
+```mermaid
+mindmap
+  root((Spring Data JPA))
+    Layers
+      Spring_Data_JPA(Spring Data JPA - Abstraction)
+      JPA_API(JPA API - Specification)
+      Hibernate(Hibernate - Implementation)
+      JDBC(JDBC - Low Level)
+    Core_Concepts
+      Entity(Entity - Table Mapping)
+      EntityManager(EntityManager - Persistence Context)
+      Repository(Repository - Data Access)
+    Features
+      JPQL(JPQL - Object Queries)
+      Criteria_API(Criteria API - Dynamic Queries)
+      Transactions(Transaction Management)
+```
 
 ## JPA Fundamentals
 
@@ -243,6 +281,39 @@ public class User {
 ```
 
 ---
+
+---
+
+## Relationships
+
+### 🧠 ELI5: The "Social Network"
+
+*   **One-to-One:** Like a **Person and their Passport**. One person has exactly one passport, and one passport belongs to exactly one person.
+*   **One-to-Many:** Like a **Mother and her Children**. One mother can have many children, but each child has only one biological mother.
+*   **Many-to-Many:** Like **Students and Classes**. One student can take many classes, and one class can have many students.
+
+### 🗺️ Mindmap: JPA Relationships
+
+```mermaid
+mindmap
+  root((Relationships))
+    OneToOne
+      UniDirectional
+      BiDirectional(mappedBy)
+    OneToMany_ManyToOne
+      Owner(Many side is usually Owner)
+      Inverse(One side uses mappedBy)
+    ManyToMany
+      JoinTable(Requires Join Table)
+    Fetch_Types
+      Lazy(Lazy - Load on demand)
+      Eager(Eager - Load immediately)
+    Cascading
+      Persist
+      Merge
+      Remove
+      All
+```
 
 ## Relationships
 
@@ -732,6 +803,37 @@ Page<User> page = userRepository.findAll(spec, pageable);
 
 ## Transactions
 
+### 🧠 ELI5: The "Bank Transfer"
+
+Imagine you are sending $100 to a friend.
+
+1.  **Step 1:** $100 is taken out of your account.
+2.  **Step 2:** $100 is added to your friend's account.
+
+If **Step 2** fails (e.g., your friend's account is closed), you don't want **Step 1** to stay finished! You would lose $100. A **Transaction** ensures that either *both* steps happen, or *neither* happens. It's "All or Nothing."
+
+### 🗺️ Mindmap: Transactions
+
+```mermaid
+mindmap
+  root((Transactions))
+    ACID_Properties
+      Atomicity(All or Nothing)
+      Consistency(Valid State)
+      Isolation(Independent)
+      Durability(Permanent)
+    Spring_Support
+      Declarative(@Transactional)
+      Programmatic(TransactionTemplate)
+    Settings
+      Propagation(REQUIRED, REQUIRES_NEW, etc.)
+      Isolation(READ_COMMITTED, etc.)
+      ReadOnly(Optimization)
+      Rollback(Rollback Rules)
+```
+
+## Transactions
+
 ### @Transactional Annotation
 
 ```java
@@ -997,6 +1099,201 @@ public class User {
     // ...
 }
 ```
+
+---
+
+## Entity Graphs
+Entity Graphs provide a way to formulate better queries by defining which attributes should be fetched eagerly. This is a powerful tool to solve the N+1 problem.
+
+### Defining an Entity Graph
+```java
+@Entity
+@NamedEntityGraph(
+    name = "User.orders",
+    attributeNodes = @NamedAttributeNode("orders")
+)
+public class User { ... }
+```
+
+### Using in Repository
+```java
+public interface UserRepository extends JpaRepository<User, Long> {
+    
+    @EntityGraph(value = "User.orders", type = EntityGraph.EntityGraphType.FETCH)
+    List<User> findAll();
+    
+    // Ad-hoc Entity Graph
+    @EntityGraph(attributePaths = {"orders", "profile"})
+    Optional<User> findByUsername(String username);
+}
+```
+
+---
+
+## Projections
+Projections allow you to fetch only a subset of columns from the database, improving performance and reducing memory usage.
+
+### 1. Interface-based Projections
+```java
+public interface UserSummary {
+    String getUsername();
+    String getEmail();
+    
+    // Default method for computed values
+    default String getFullName() {
+        return getUsername() + " (" + getEmail() + ")";
+    }
+}
+
+// Repository
+List<UserSummary> findByStatus(Status status);
+```
+
+### 2. Class-based (DTO) Projections
+```java
+public record UserDto(Long id, String username) {}
+
+// Repository
+List<UserDto> findAllByStatus(Status status);
+```
+
+---
+
+## JPA Auditing
+Automatically populate fields like `createdAt`, `updatedAt`, `createdBy`, and `lastModifiedBy`.
+
+### Enable Auditing
+```java
+@Configuration
+@EnableJpaAuditing
+public class JpaConfig {
+    @Bean
+    public AuditorAware<String> auditorProvider() {
+        return () -> Optional.of("system"); // Or get from SecurityContext
+    }
+}
+```
+
+### Usage in Entity
+```java
+@MappedSuperclass
+@EntityListeners(AuditingEntityListener.class)
+@Data
+public abstract class BaseEntity {
+    @CreatedDate
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
+
+    @CreatedBy
+    @Column(updatable = false)
+    private String createdBy;
+
+    @LastModifiedBy
+    private String lastModifiedBy;
+}
+```
+
+---
+
+---
+
+## Transaction Pitfalls & Rollback Rules
+
+### 1. Default Rollback Behavior
+By default, Spring `@Transactional` only rolls back for **Unchecked Exceptions** (`RuntimeException` and `Error`). It does **NOT** roll back for **Checked Exceptions** (e.g., `IOException`, `SQLException`).
+
+**Fix**:
+```java
+@Transactional(rollbackFor = Exception.class) // Rollback for ALL exceptions
+public void myMethod() { ... }
+```
+
+### 2. Self-Invocation Issue
+Just like AOP, calling a `@Transactional` method from within the same class bypassing the proxy.
+
+### 3. Public Methods Only
+`@Transactional` only works on **public** methods. If applied to `private` or `protected` methods, it will be silently ignored.
+
+---
+
+## Hibernate Caching (1st & 2nd Level)
+
+### 1. First-Level Cache (L1)
+- **Scope**: Associated with the `Session` (EntityManager).
+- **Behavior**: Enabled by default and cannot be disabled.
+- **Function**: Within a single transaction, if you request the same entity twice, Hibernate returns the same object without hitting the DB.
+
+### 2. Second-Level Cache (L2)
+- **Scope**: Associated with the `SessionFactory`. Shared across sessions.
+- **Behavior**: Disabled by default. Requires a provider like **Ehcache** or **Redis**.
+- **Function**: Stores entity data across transactions.
+
+### 3. Query Cache
+- Stores the results of a query (list of IDs). Works in conjunction with L2 cache.
+
+---
+
+## Optimistic vs Pessimistic Locking
+
+### 1. Optimistic Locking
+- **Mechanism**: Uses a `@Version` field.
+- **Behavior**: Doesn't lock the DB row. Instead, it checks if the version has changed before updating.
+- **Exception**: `OptimisticLockException`.
+- **Use Case**: High-concurrency systems where collisions are rare.
+
+### 2. Pessimistic Locking
+- **Mechanism**: Uses DB-level locks (`SELECT ... FOR UPDATE`).
+- **Behavior**: Locks the row until the transaction completes.
+- **Use Case**: When data integrity is critical and collisions are frequent.
+
+```java
+@Lock(LockModeType.PESSIMISTIC_WRITE)
+Optional<User> findById(Long id);
+```
+
+---
+
+## Soft Deletes with @SQLDelete
+
+Instead of physically deleting rows, we mark them as deleted.
+
+```java
+@Entity
+@SQLDelete(sql = "UPDATE users SET deleted = true WHERE id = ?")
+@Where(clause = "deleted = false")
+public class User {
+    @Id private Long id;
+    private boolean deleted = false;
+}
+```
+- `@SQLDelete`: Overrides the default `DELETE` query.
+- `@Where`: Automatically adds a filter to all `SELECT` queries.
+
+---
+
+## N+1 Problem: Deep Dive & Solutions
+
+### What is it?
+Fetching $N$ entities results in $1$ query for the main entities and $N$ additional queries for their associations.
+
+### Solutions:
+1.  **Join Fetch (JPQL)**:
+    ```java
+    @Query("SELECT u FROM User u JOIN FETCH u.orders")
+    ```
+2.  **Entity Graph**:
+    ```java
+    @EntityGraph(attributePaths = {"orders"})
+    ```
+3.  **Batch Size**:
+    ```java
+    @BatchSize(size = 20)
+    @OneToMany(...)
+    ```
+    This reduces $N+1$ to $N/20 + 1$ queries.
 
 ---
 
