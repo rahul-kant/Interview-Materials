@@ -29,23 +29,35 @@ Imagine you are trying to enter a **VIP Nightclub**.
 
 ### 🗺️ Mindmap: Spring Security Overview
 
-```mermaid
-mindmap
-  root((Spring Security))
-    Core_Concepts
-      Authentication(Authentication - Who?)
-      Authorization(Authorization - What?)
-      Principal(Principal - User)
-      Authorities(Authorities - Roles/Perms)
-    Architecture
-      FilterChain(Security Filter Chain)
-      SecurityContext(Security Context Holder)
-      AuthenticationManager(Authentication Manager)
-    Features
-      JWT(JWT Support)
-      OAuth2(OAuth2 / OIDC)
-      Protection(CSRF / CORS / XSS)
-      Method_Security(Method Level Security)
+## 🔒 Security Architecture
+
+> [!TIP]
+> **Interview Pro-Tip: "How do you handle stateless authentication with JWT?"**
+> In a stateless app, you must disable sessions:
+> `sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)`.
+> This tells Spring NOT to create a `JSESSIONID` cookie. Instead, the client must send the JWT in the `Authorization: Bearer <token>` header for every request.
+
+### 🔍 Deep Dive: SecurityContextHolder & ThreadLocal
+By default, Spring Security stores the `Authentication` object in a `ThreadLocal`. This means the security info is "bound" to the current thread. If you spawn a new thread (e.g., using `@Async`), the security context is **lost** unless you use `DelegatingSecurityContextAsyncTaskExecutor` or set the strategy to `MODE_INHERITABLETHREADLOCAL`.
+
+### 🛠️ Complex Example: Custom PermissionEvaluator
+```java
+@Component
+public class CustomPermissionEvaluator implements PermissionEvaluator {
+    @Override
+    public boolean hasPermission(Authentication auth, Object targetDomainObject, Object permission) {
+        if ((auth == null) || (targetDomainObject == null) || !(permission instanceof String)) {
+            return false;
+        }
+        String targetType = targetDomainObject.getClass().getSimpleName().toUpperCase();
+        return hasPrivilege(auth, targetType, permission.toString().toUpperCase());
+    }
+    // ... implementation of hasPrivilege
+}
+
+// Usage in Service
+@PreAuthorize("hasPermission(#document, 'WRITE')")
+public void updateDocument(Document document) { ... }
 ```
 
 ## Spring Security Fundamentals
@@ -75,6 +87,10 @@ mindmap
 - All endpoints secured
 - Default user: `user`
 - Password: Generated at startup (check console)
+
+### Security Filter Chain
+
+## 🔒 Security Architecture
 
 ### Security Filter Chain
 
@@ -329,6 +345,10 @@ public class SecurityConfig {
 
 ## Authorization
 
+## 🔒 Security Architecture
+
+## Authorization
+
 ### Method-Level Security
 
 ```java
@@ -472,21 +492,7 @@ Imagine you buy a **Movie Ticket** online.
 
 ### 🗺️ Mindmap: JWT Flow
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant S as Server
-    participant DB as Database
-
-    U->>S: 1. Login (User/Pass)
-    S->>DB: 2. Verify User
-    DB-->>S: 3. User Valid
-    S->>S: 4. Create JWT (Signed)
-    S-->>U: 5. Return JWT
-    U->>S: 6. Request + JWT (Header)
-    S->>S: 7. Validate Signature
-    S-->>U: 8. Return Data
-```
+## 🔒 Security Architecture
 
 ## JWT Authentication
 

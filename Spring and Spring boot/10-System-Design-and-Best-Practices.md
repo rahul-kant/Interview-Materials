@@ -15,6 +15,39 @@
 
 ## Performance Optimization
 
+## 🏗️ Architecture Diagram
+
+> [!TIP]
+> **Interview Pro-Tip: "How do you handle high-concurrency in Spring?"**
+> 1. **Non-blocking I/O**: Use WebFlux for I/O bound tasks.
+> 2. **Caching**: Use Redis to offload the DB.
+> 3. **Connection Pooling**: Tune HikariCP.
+> 4. **Async**: Use `@Async` for fire-and-forget tasks.
+> 5. **Database Tuning**: Use Read-Replicas and Indexing.
+
+### 🔍 Deep Dive: L1 vs L2 Cache in Hibernate
+- **L1 Cache (Session Level)**: Always on. It's mandatory and bound to the `EntityManager` session. It prevents multiple queries for the same entity within the same transaction.
+- **L2 Cache (SessionFactory Level)**: Optional. Shared across all sessions. Requires a provider like **Ehcache** or **Hazelcast**. It's great for "Read-Heavy" data that doesn't change often.
+
+### 🛠️ Complex Example: Multi-Level Caching (Redis + Caffeine)
+```java
+@Configuration
+public class CacheConfig {
+    @Bean
+    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        // Caffeine for L1 (In-memory, ultra-fast)
+        CaffeineCacheManager caffeine = new CaffeineCacheManager("local-cache");
+        
+        // Redis for L2 (Distributed, shared)
+        RedisCacheManager redis = RedisCacheManager.builder(connectionFactory).build();
+        
+        return new CompositeCacheManager(caffeine, redis);
+    }
+}
+```
+
+## Performance Optimization
+
 ### 1. Connection Pooling (HikariCP)
 
 Spring Boot uses HikariCP by default, which is very fast.
@@ -87,6 +120,10 @@ public class HeavyBean { ... }
 ```
 
 ---
+
+## Design Patterns in Spring
+
+## 🏗️ Architecture Diagram
 
 ## Design Patterns in Spring
 
@@ -246,6 +283,10 @@ spring:
 ```
 
 ---
+
+## Caching Strategies
+
+## 🏗️ Architecture Diagram
 
 ## Caching Strategies
 

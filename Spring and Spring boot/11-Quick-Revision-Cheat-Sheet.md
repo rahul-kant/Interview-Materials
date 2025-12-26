@@ -1,5 +1,42 @@
 # Spring & Spring Boot - Quick Revision Cheat Sheet
 
+## 🗺️ Quick Revision Roadmap
+
+> [!TIP]
+> **Interview Pro-Tip: "The 5 Most Common Spring Questions"**
+> 1. **Explain IoC and DI.** (The "What" and "How").
+> 2. **What is the Bean Lifecycle?** (The "When").
+> 3. **Spring MVC Flow.** (The "Where" - DispatcherServlet).
+> 4. **How does @Transactional work?** (The "Magic" - AOP Proxies).
+> 5. **Spring Boot Auto-Configuration.** (The "Why" - Opinionated defaults).
+
+### 🔍 Deep Dive: Last-Minute Prep Strategy
+If you have only 10 minutes:
+1. **Review Annotations**: Know the difference between `@Component`, `@Service`, `@Repository`, and `@Controller`.
+2. **Review Scopes**: Singleton vs Prototype.
+3. **Review Boot Essentials**: Starters, Actuator, and Auto-config.
+4. **Review JPA Pitfalls**: N+1 problem and `@Transactional` rollback rules.
+
+### 🛠️ Complex Example: The "Master Config"
+```java
+@Configuration
+@EnableAsync
+@EnableCaching
+@EnableTransactionManagement
+@EnableAspectJAutoProxy
+public class MasterConfig {
+    // This class enables the 5 most important Spring features in one place!
+    
+    @Bean
+    @Primary
+    public DataSource primaryDataSource() { ... }
+    
+    @Bean
+    @Qualifier("secondary")
+    public DataSource secondaryDataSource() { ... }
+}
+```
+
 ## 🚀 Core Spring
 - **IoC (Inversion of Control)**: Spring manages object creation and lifecycle.
 - **DI (Dependency Injection)**: Objects get dependencies from outside.

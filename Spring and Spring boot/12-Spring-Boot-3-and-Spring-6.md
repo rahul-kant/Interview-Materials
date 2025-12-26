@@ -18,6 +18,41 @@ Spring Boot 3.0 requires **Java 17** as a minimum version and supports **Java 21
 ---
 
 ## Virtual Threads (Project Loom)
+
+## 🏗️ Architecture Diagram
+
+> [!TIP]
+> **Interview Pro-Tip: "What is the biggest change in Spring Boot 3?"**
+> While there are many, the **Jakarta EE 9/10 migration** (javax to jakarta) is the most impactful for existing apps. However, **Native Image support** and **Virtual Threads** are the most exciting for new, high-performance applications.
+
+### 🔍 Deep Dive: Virtual Threads vs Platform Threads
+- **Platform Threads**: Managed by the OS. 1:1 mapping. Expensive to create and switch. Blocking one thread stops the OS thread.
+- **Virtual Threads**: Managed by the JVM. M:N mapping (many virtual threads on few carrier threads). Extremely lightweight. When a virtual thread blocks, the JVM "unmounts" it from the carrier thread, allowing other virtual threads to run.
+
+### 🛠️ Complex Example: Declarative HTTP Client with Auth
+```java
+public interface GitHubClient {
+    @GetExchange("/users/{username}")
+    Mono<GitHubUser> getUser(@PathVariable String username);
+}
+
+@Configuration
+public class GitHubConfig {
+    @Bean
+    GitHubClient gitHubClient(WebClient.Builder builder) {
+        WebClient webClient = builder
+            .baseUrl("https://api.github.com")
+            .defaultHeader("Authorization", "Bearer " + token)
+            .build();
+        return HttpServiceProxyFactory
+            .builder(WebClientAdapter.forClient(webClient))
+            .build()
+            .createClient(GitHubClient.class);
+    }
+}
+```
+
+## Virtual Threads (Project Loom)
 Available in Spring Boot 3.2+ with Java 21.
 
 ### Why Virtual Threads?
@@ -36,6 +71,10 @@ spring:
 - **Tomcat/Jetty**: Automatically switches to using virtual threads for request handling.
 
 ---
+
+## Declarative HTTP Interfaces
+
+## 🏗️ Architecture Diagram
 
 ## Declarative HTTP Interfaces
 Define HTTP services as Java interfaces, similar to Feign but built-in.

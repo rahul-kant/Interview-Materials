@@ -11,6 +11,35 @@
 ---
 
 ## The Testing Pyramid
+
+## 🧪 Testing Pyramid
+
+> [!TIP]
+> **Interview Pro-Tip: "How do you test asynchronous code in Spring?"**
+> Use **Awaitility**. It allows you to "wait" for an asynchronous condition to become true without using `Thread.sleep()`.
+> ```java
+> await().atMost(5, SECONDS).until(() -> emailService.getCount() == 1);
+> ```
+
+### 🔍 Deep Dive: @SpyBean vs @MockBean
+- **@MockBean**: Replaces the real bean with a complete mock. All methods return null/default unless stubbed.
+- **@SpyBean**: Wraps the *real* bean. Methods call the real implementation unless you explicitly stub them. **Use @SpyBean when you want to test the real logic but monitor or stub one specific method.**
+
+### 🛠️ Complex Example: Reactive Testing with StepVerifier
+```java
+@Test
+void testReactiveFlow() {
+    Flux<String> flux = Flux.just("A", "B", "C");
+    
+    StepVerifier.create(flux)
+        .expectNext("A")
+        .expectNext("B")
+        .expectNext("C")
+        .verifyComplete();
+}
+```
+
+## The Testing Pyramid
 A healthy test suite follows the pyramid:
 - **Unit Tests** (Many): Fast, test logic in isolation.
 - **Integration Tests** (Some): Test interaction between components (e.g., `@DataJpaTest`).

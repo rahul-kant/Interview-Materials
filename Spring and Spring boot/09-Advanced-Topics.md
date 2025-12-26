@@ -367,6 +367,37 @@ class DatabaseIntegrationTest {
 
 ## Spring Native & GraalVM
 
+## 🏗️ Architecture Diagram
+
+> [!TIP]
+> **Interview Pro-Tip: "When should you use Spring Native?"**
+> Spring Native is perfect for **Serverless** (AWS Lambda, Google Cloud Functions) and **Scale-to-Zero** environments where startup time is critical. However, for long-running monoliths, the JIT compiler might actually provide better peak performance over time.
+
+### 🔍 Deep Dive: GraalVM AOT vs JVM JIT
+- **JVM JIT (Just-In-Time)**: Compiles bytecode to machine code *at runtime*. It can optimize based on actual usage patterns (Profile-Guided Optimization).
+- **GraalVM AOT (Ahead-Of-Time)**: Compiles code to a native binary *at build time*. It uses "Static Analysis" to find all reachable code. Anything not reachable is removed, resulting in a tiny, fast-starting executable.
+
+### 🛠️ Complex Example: Custom ImportSelector
+```java
+public class MyServiceImportSelector implements ImportSelector {
+    @Override
+    public String[] selectImports(AnnotationMetadata importingClassMetadata) {
+        // Dynamically decide which beans to load based on environment or properties
+        String type = System.getProperty("service.type", "default");
+        if ("premium".equals(type)) {
+            return new String[] { PremiumServiceConfig.class.getName() };
+        }
+        return new String[] { DefaultServiceConfig.class.getName() };
+    }
+}
+
+@Configuration
+@Import(MyServiceImportSelector.class)
+public class MainConfig {}
+```
+
+## Spring Native & GraalVM
+
 Compiles Java applications into native executables.
 
 **Benefits**:

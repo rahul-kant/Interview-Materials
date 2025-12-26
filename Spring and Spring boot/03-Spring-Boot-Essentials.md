@@ -28,27 +28,42 @@ Imagine you are at a fast-food restaurant.
 
 ### 🗺️ Mindmap: Spring Boot Overview
 
-```mermaid
-mindmap
-  root((Spring Boot))
-    Core_Concepts
-      Auto_Configuration(Auto-Configuration)
-      Starters(Starters)
-      Opinionated(Opinionated Defaults)
-    Production_Ready
-      Actuator(Actuator)
-      Metrics(Metrics)
-      Health_Checks(Health Checks)
-    Deployment
-      Embedded_Servers(Embedded Servers)
-        Tomcat
-        Jetty
-        Undertow
-      Fat_Jar(Fat JAR)
-    Configuration
-      YAML_Properties(YAML/Properties)
-      Profiles(Profiles)
-      Externalized(Externalized Config)
+## 🗺️ Spring Boot Architecture
+
+> [!TIP]
+> **Interview Pro-Tip: "What is the difference between @Value and @ConfigurationProperties?"**
+> - **@Value**: Good for single values. Doesn't support "Relaxed Binding" (e.g., `my-prop` vs `myProp`). Harder to group related properties.
+> - **@ConfigurationProperties**: Best for groups of related properties. Supports **Relaxed Binding**, validation (JSR-303), and is more type-safe. **Use this for most production configs.**
+
+### 🔍 Deep Dive: The SpringApplication.run() Process
+When you call `SpringApplication.run()`, several things happen:
+1. **Start StopWatch**: To measure startup time.
+2. **Prepare Environment**: Load properties and profiles.
+3. **Create ApplicationContext**: Usually an `AnnotationConfigServletWebServerApplicationContext`.
+4. **Refresh Context**: This is where all beans are created and auto-configuration is applied.
+5. **Call Runners**: Execute any `CommandLineRunner` or `ApplicationRunner` beans.
+
+### 🛠️ Complex Example: Custom @Conditional Annotation
+```java
+@Target({ ElementType.TYPE, ElementType.METHOD })
+@Retention(RetentionPolicy.RUNTIME)
+@Conditional(OnUnixCondition.class)
+public @interface ConditionalOnUnix {}
+
+public class OnUnixCondition implements Condition {
+    @Override
+    public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+        return System.getProperty("os.name").toLowerCase().contains("nix") ||
+               System.getProperty("os.name").toLowerCase().contains("nux");
+    }
+}
+
+@Configuration
+@ConditionalOnUnix
+public class UnixSpecificConfig {
+    @Bean
+    public MyService unixService() { return new UnixServiceImpl(); }
+}
 ```
 
 ## Spring Boot Fundamentals
@@ -125,22 +140,7 @@ Imagine you move into a **Smart Home**.
 
 ### 🗺️ Mindmap: Auto-Configuration
 
-```mermaid
-graph TD
-    Start((Start App)) --> Scan[1. Scan Classpath]
-    Scan --> CondClass{Class Exists?}
-    CondClass -- Yes --> CondBean{Bean Exists?}
-    CondBean -- No --> Config[2. Apply Auto-Config]
-    CondBean -- Yes --> Skip[3. Skip - User Defined]
-    CondClass -- No --> Skip
-    Config --> End((Context Ready))
-
-    subgraph "Key Annotations"
-    A1[@ConditionalOnClass]
-    A2[@ConditionalOnMissingBean]
-    A3[@ConditionalOnProperty]
-    end
-```
+## 🏗️ Architecture Diagram
 
 ## Auto-Configuration
 
@@ -287,24 +287,7 @@ Imagine you want to do some **Gardening**.
 
 ### 🗺️ Mindmap: Starters
 
-```mermaid
-mindmap
-  root((Starters))
-    Web(spring-boot-starter-web)
-      MVC
-      Tomcat
-      JSON
-    Data(spring-boot-starter-data-jpa)
-      Hibernate
-      HikariCP
-    Security(spring-boot-starter-security)
-      Auth
-      Encryption
-    Test(spring-boot-starter-test)
-      JUnit
-      Mockito
-      AssertJ
-```
+## 📦 Spring Boot Starters
 
 ## Spring Boot Starters
 
@@ -597,24 +580,7 @@ When you drive a car, you don't need to look under the hood every minute to see 
 
 ### 🗺️ Mindmap: Actuator
 
-```mermaid
-mindmap
-  root((Actuator))
-    Endpoints
-      Health(Health)
-      Info(Info)
-      Metrics(Metrics)
-      Env(Environment)
-      Loggers(Loggers)
-      Mappings(Mappings)
-    Customization
-      HealthIndicators(Custom Health)
-      InfoContributors(Custom Info)
-      Micrometer(Custom Metrics)
-    Security
-      Exposure(Include/Exclude)
-      Protection(Spring Security)
-```
+## 🏗️ Architecture Diagram
 
 ## Spring Boot Actuator
 
@@ -760,6 +726,10 @@ public class CustomInfoContributor implements InfoContributor {
 ```
 
 ---
+
+## Profiles
+
+## 🏗️ Architecture Diagram
 
 ## Profiles
 

@@ -16,6 +16,49 @@
 
 ---
 
+## REST API Overview
+
+## 🏗️ Architecture Diagram
+
+> [!TIP]
+> **Interview Pro-Tip: "How do you handle versioning in REST APIs?"**
+> There are 4 common ways:
+> 1. **URI Versioning**: `/api/v1/users` (Most common, easy to cache).
+> 2. **Query Param**: `/api/users?version=1`.
+> 3. **Custom Header**: `X-API-VERSION: 1`.
+> 4. **Accept Header (Media Type)**: `Accept: application/vnd.myapi.v1+json`.
+
+### 🔍 Deep Dive: DispatcherServlet Internals
+The `DispatcherServlet` is the heart of Spring MVC. It uses a list of `HandlerMapping` beans to find the right controller. By default, it uses `RequestMappingHandlerMapping` (for `@RequestMapping`). Once found, it uses a `HandlerAdapter` to actually call the method. This modular design allows Spring to support different types of handlers (like standard Servlets or even custom ones).
+
+### 🛠️ Complex Example: Custom HandlerInterceptor
+```java
+@Component
+public class ApiKeyInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        String apiKey = request.getHeader("X-API-KEY");
+        if ("valid-key".equals(apiKey)) {
+            return true;
+        }
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.getWriter().write("Invalid API Key");
+        return false;
+    }
+}
+
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+    @Autowired private ApiKeyInterceptor apiKeyInterceptor;
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(apiKeyInterceptor).addPathPatterns("/api/**");
+    }
+}
+```
+
+---
+
 ## REST Fundamentals
 
 ### 🧠 ELI5: The "Universal Remote Control"
@@ -28,26 +71,7 @@ Imagine you have a **Universal Remote Control** that works for every TV in the w
 
 ### 🗺️ Mindmap: REST Principles
 
-```mermaid
-mindmap
-  root((REST Principles))
-    Client_Server(Client-Server)
-      Separation(Separation of Concerns)
-    Stateless(Statelessness)
-      No_Session(No Server-side Session)
-      Self_Contained(Self-contained Requests)
-    Cacheable(Cacheability)
-      Performance(Improved Performance)
-      Headers(Cache-Control Headers)
-    Uniform_Interface(Uniform Interface)
-      Identification(Resource Identification - URI)
-      Manipulation(Manipulation via Representations)
-      Self_Descriptive(Self-descriptive Messages)
-      HATEOAS(HATEOAS)
-    Layered_System(Layered System)
-      Proxies(Proxies/Gateways)
-      Security(Security Layers)
-```
+## 🏗️ Architecture Diagram
 
 ## REST Fundamentals
 
@@ -111,26 +135,7 @@ Imagine a busy **Restaurant**.
 
 ### 🗺️ Mindmap: Spring MVC Flow
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant DS as DispatcherServlet
-    participant HM as HandlerMapping
-    participant HA as HandlerAdapter
-    participant CTRL as Controller
-    participant VR as ViewResolver
-
-    C->>DS: 1. HTTP Request
-    DS->>HM: 2. Find Handler
-    HM-->>DS: 3. Return Handler
-    DS->>HA: 4. Invoke Handler
-    HA->>CTRL: 5. Execute Logic
-    CTRL-->>HA: 6. Return Data
-    HA-->>DS: 7. Return ModelAndView
-    DS->>VR: 8. Resolve View (if needed)
-    VR-->>DS: 9. Return View
-    DS-->>C: 10. HTTP Response
-```
+## 🏗️ Architecture Diagram
 
 ## Spring MVC Architecture
 
@@ -175,6 +180,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 ```
 
 ---
+
+## Building REST APIs
+
+## 🏗️ Architecture Diagram
 
 ## Building REST APIs
 
@@ -485,6 +494,10 @@ public ResponseEntity<PaginatedResponse<UserDTO>> getUsersPaginated(
 
 ## Validation
 
+## 🏗️ Architecture Diagram
+
+## Validation
+
 ### Bean Validation Annotations
 
 ```java
@@ -615,20 +628,7 @@ Imagine you are a **Trapeze Artist** in a circus.
 
 ### 🗺️ Mindmap: Exception Handling
 
-```mermaid
-mindmap
-  root((Exception Handling))
-    Levels
-      Method_Level(@ExceptionHandler in Controller)
-      Global_Level(@ControllerAdvice / @RestControllerAdvice)
-    Response_Types
-      ResponseEntity(Custom Body + Status)
-      ResponseStatus(@ResponseStatus)
-      ProblemDetail(RFC 7807 - Spring 6)
-    Key_Classes
-      ResponseEntityExceptionHandler(Base Class)
-      ErrorResponse(Custom DTO)
-```
+## 🏗️ Architecture Diagram
 
 ## Exception Handling
 

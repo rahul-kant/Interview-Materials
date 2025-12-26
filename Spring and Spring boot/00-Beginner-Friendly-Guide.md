@@ -20,6 +20,36 @@ This guide explains Spring concepts using simple language, real-world analogies,
 
 ## What is Spring? (The Restaurant Analogy)
 
+### 🏗️ Spring Architecture
+
+> [!TIP]
+> **Interview Pro-Tip: "How does Spring Boot know which beans to create?"**
+> Spring Boot uses **Auto-Configuration**. It looks at the jars on your classpath. If it sees `h2.jar`, it automatically configures an H2 database bean. It uses `@Conditional` annotations (like `@ConditionalOnClass`) to decide whether to create a bean or not.
+
+### 🔍 Deep Dive: How Auto-Configuration Works
+Behind the scenes, `@SpringBootApplication` includes `@EnableAutoConfiguration`. This annotation tells Spring to look for a file named `META-INF/spring.factories` (in older versions) or `org.springframework.boot.autoconfigure.AutoConfiguration.imports` (in newer versions) inside starter jars. These files list all the possible configuration classes that Spring Boot can apply.
+
+### 🛠️ Complex Example: Conditional Configuration
+```java
+@Configuration
+public class MyDatabaseConfig {
+
+    @Bean
+    @ConditionalOnProperty(name = "use.custom.db", havingValue = "true")
+    public DataSource customDataSource() {
+        return new PostgreSQLDataSource();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DataSource defaultDataSource() {
+        return new H2DataSource(); // Only used if no other DataSource is defined
+    }
+}
+```
+
+## What is Spring? (The Restaurant Analogy)
+
 ### 🍽️ Imagine a Restaurant
 
 **Without Spring (Traditional Way):**
@@ -51,6 +81,40 @@ This guide explains Spring concepts using simple language, real-world analogies,
 - Saves you hours of configuration
 
 ---
+
+## Dependency Injection Explained Simply
+
+### 🔌 Dependency Injection
+
+> [!TIP]
+> **Interview Pro-Tip: "Why is constructor injection preferred over field injection?"**
+> 1. **Immutability**: You can make dependencies `final`.
+> 2. **Testing**: You can easily pass mock objects in unit tests without needing a Spring context.
+> 3. **Null Safety**: The object cannot be created without its required dependencies.
+
+### 🔍 Deep Dive: ApplicationContext vs BeanFactory
+- **BeanFactory**: The basic container. It loads beans **lazily** (only when you ask for them). Good for low-memory devices.
+- **ApplicationContext**: The advanced container (extends BeanFactory). It loads beans **eagerly** at startup. It also adds features like internationalization (i18n) and event publishing. **Always use this for modern apps.**
+
+### 🛠️ Complex Example: Qualifiers and Primary
+```java
+public interface PaymentService { void pay(); }
+
+@Service @Primary
+public class CreditCardService implements PaymentService { ... }
+
+@Service @Qualifier("paypal")
+public class PayPalService implements PaymentService { ... }
+
+@RestController
+public class CheckoutController {
+    private final PaymentService paymentService;
+
+    public CheckoutController(@Qualifier("paypal") PaymentService paymentService) {
+        this.paymentService = paymentService; // Injects PayPal instead of CreditCard
+    }
+}
+```
 
 ## Dependency Injection Explained Simply
 
@@ -146,6 +210,29 @@ public class Car {
 
 ## Bean Lifecycle (Like Growing a Plant)
 
+## 🌱 Bean Lifecycle
+
+> [!TIP]
+> **Interview Pro-Tip: "What is the difference between @PostConstruct and afterPropertiesSet()?"**
+> Both do the same thing (run after DI). However, `@PostConstruct` is part of the Java standard (JSR-250) and is decoupled from Spring. `InitializingBean.afterPropertiesSet()` is a Spring-specific interface. **Use @PostConstruct** to keep your code "cleaner" and less dependent on Spring interfaces.
+
+### 🔍 Deep Dive: BeanPostProcessor
+This is the "magic" behind Spring. A `BeanPostProcessor` can intercept every bean during its creation. This is how **Spring AOP** (Aspect Oriented Programming) works—it wraps your bean in a "Proxy" to add features like logging or transactions without changing your code.
+
+### 🛠️ Complex Example: Custom BeanPostProcessor
+```java
+@Component
+public class ExecutionTimeLogger implements BeanPostProcessor {
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) {
+        System.out.println("Bean '" + beanName + "' created at: " + LocalDateTime.now());
+        return bean;
+    }
+}
+```
+
+## Bean Lifecycle (Like Growing a Plant)
+
 ### 🌱 The Garden Analogy
 
 Think of a Spring Bean as a plant growing in a garden:
@@ -193,6 +280,43 @@ public class CoffeeShop {
 ```
 
 ---
+
+## Spring Profiles (Like Changing Outfits)
+
+### 👔 Spring Profiles
+
+> [!TIP]
+> **Interview Pro-Tip: "How do you activate profiles in production?"**
+> Never hardcode it! Use environment variables:
+> `export SPRING_PROFILES_ACTIVE=prod`
+> Or pass it as a command-line argument:
+> `java -jar app.jar --spring.profiles.active=prod`
+
+### 🔍 Deep Dive: Profile Expressions
+You can use complex logic to activate beans. For example:
+`@Profile("dev & !cloud")` -> Active only in 'dev' AND if NOT in 'cloud'.
+`@Profile("production | staging")` -> Active in either 'production' OR 'staging'.
+
+### 🛠️ Complex Example: Multi-Profile YAML
+```yaml
+spring:
+  profiles:
+    active: dev
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+database:
+  url: jdbc:h2:mem:testdb
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+database:
+  url: jdbc:postgresql://prod-db:5432/mydb
+```
 
 ## Spring Profiles (Like Changing Outfits)
 
@@ -270,6 +394,40 @@ java -jar coffee-shop.jar --spring.profiles.active=prod
 
 ## REST APIs (Like a Menu at a Restaurant)
 
+### 🌐 REST API Overview
+
+> [!TIP]
+> **Interview Pro-Tip: "What is the difference between @Controller and @RestController?"**
+> `@Controller` is for traditional web pages (returns HTML/View). You need `@ResponseBody` on every method to return JSON.
+> `@RestController` is a convenience annotation that combines `@Controller` and `@ResponseBody`. It's designed for APIs that return data (JSON/XML).
+
+### 🔍 Deep Dive: Content Negotiation
+How does Spring know whether to return JSON or XML? It uses the `Accept` header sent by the client. If the client sends `Accept: application/xml`, Spring looks for an XML converter (like Jackson XML) and converts the object automatically.
+
+### 🛠️ Complex Example: Robust REST Controller
+```java
+@RestController
+@RequestMapping("/api/v1/orders")
+public class OrderController {
+
+    @GetMapping("/{id}")
+    public ResponseEntity<OrderResource> getOrder(@PathVariable Long id) {
+        Order order = service.findById(id);
+        OrderResource resource = new OrderResource(order);
+        // Add HATEOAS links (links to related actions)
+        resource.add(linkTo(methodOn(OrderController.class).cancelOrder(id)).withRel("cancel"));
+        return ResponseEntity.ok(resource);
+    }
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ResponseEntity<ErrorDetails> handleNotFound(OrderNotFoundException ex) {
+        return new ResponseEntity<>(new ErrorDetails(ex.getMessage()), HttpStatus.NOT_FOUND);
+    }
+}
+```
+
+## REST APIs (Like a Menu at a Restaurant)
+
 ### 🍔 The Restaurant Menu Analogy
 
 A REST API is like a restaurant menu:
@@ -340,6 +498,29 @@ curl http://localhost:8080/api/coffee/123
 ```
 
 ---
+
+## Databases & JPA (Like a Library)
+
+### 💾 JPA Architecture
+
+> [!TIP]
+> **Interview Pro-Tip: "How do you handle large datasets in JPA?"**
+> Never use `findAll()` for large tables! Use **Pagination**:
+> `Page<User> findByStatus(String status, Pageable pageable);`
+> This only fetches a small "slice" of data at a time.
+
+### 🔍 Deep Dive: Hibernate Caching
+- **First-Level Cache**: Associated with the `Session`. It's enabled by default. If you ask for the same ID twice in one transaction, Hibernate only hits the DB once.
+- **Second-Level Cache**: Shared across sessions. Needs external providers like Ehcache or Redis. Good for data that changes rarely.
+
+### 🛠️ Complex Example: Solving N+1 with EntityGraph
+```java
+public interface UserRepository extends JpaRepository<User, Long> {
+    
+    @EntityGraph(attributePaths = {"roles", "permissions"})
+    List<User> findAll(); // Fetches users, roles, and permissions in ONE query
+}
+```
 
 ## Databases & JPA (Like a Library)
 
@@ -427,6 +608,39 @@ public class Student {
 ```
 
 ---
+
+## Security (Like a Bouncer at a Club)
+
+### 🔒 Spring Security Architecture
+
+> [!TIP]
+> **Interview Pro-Tip: "What is CSRF and how does Spring protect against it?"**
+> CSRF (Cross-Site Request Forgery) is when a malicious site tricks you into making a request to another site where you're logged in. Spring Security protects you by requiring a **CSRF Token** for every "state-changing" request (POST, PUT, DELETE).
+
+### 🔍 Deep Dive: The Security Filter Chain
+Spring Security is just a chain of filters. When a request comes in, it passes through filters like `UsernamePasswordAuthenticationFilter`, `BasicAuthenticationFilter`, and finally `FilterSecurityInterceptor`. The `DelegatingFilterProxy` is the bridge that connects the standard Servlet container to Spring's managed filters.
+
+### 🛠️ Complex Example: Custom Authentication Provider
+```java
+@Component
+public class CustomAuthProvider implements AuthenticationProvider {
+    @Override
+    public Authentication authenticate(Authentication auth) {
+        String username = auth.getName();
+        String password = auth.getCredentials().toString();
+        
+        if ("admin".equals(username) && "secret".equals(password)) {
+            return new UsernamePasswordAuthenticationToken(username, password, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+        }
+        throw new BadCredentialsException("External system says NO");
+    }
+
+    @Override
+    public boolean supports(Class<?> auth) {
+        return auth.equals(UsernamePasswordAuthenticationToken.class);
+    }
+}
+```
 
 ## Security (Like a Bouncer at a Club)
 

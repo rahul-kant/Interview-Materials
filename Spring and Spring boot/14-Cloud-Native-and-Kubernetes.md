@@ -11,6 +11,38 @@
 ---
 
 ## Kubernetes-Native Spring Boot
+
+## 🏗️ Architecture Diagram
+
+> [!TIP]
+> **Interview Pro-Tip: "How do you handle secrets in Kubernetes?"**
+> Never store secrets in `application.properties` or `ConfigMaps`. Use **Kubernetes Secrets**. In Spring, you can mount these as environment variables or as files. For even better security, use **Spring Cloud Vault** to fetch secrets directly from HashiCorp Vault.
+
+### 🔍 Deep Dive: Graceful Shutdown in K8s
+When a Pod is deleted, K8s sends a `SIGTERM`.
+1. **PreStop Hook**: K8s can run a command before the SIGTERM.
+2. **SIGTERM**: Spring Boot receives this and stops accepting new traffic.
+3. **Grace Period**: Spring waits for active requests to finish (up to `timeout-per-shutdown-phase`).
+4. **SIGKILL**: If the app is still running after the grace period, K8s kills it. **Setting a proper grace period is key to zero-downtime.**
+
+### 🛠️ Complex Example: ConfigMap & Secret Integration
+```yaml
+# bootstrap.yml (Spring Cloud Kubernetes)
+spring:
+  application:
+    name: my-service
+  cloud:
+    kubernetes:
+      config:
+        name: my-service-config
+        sources:
+          - name: global-config
+      secrets:
+        name: my-service-secrets
+        enabled: true
+```
+
+## Kubernetes-Native Spring Boot
 Spring Boot is "Kubernetes-aware" and can detect when it's running in a K8s environment.
 
 ### Spring Cloud Kubernetes

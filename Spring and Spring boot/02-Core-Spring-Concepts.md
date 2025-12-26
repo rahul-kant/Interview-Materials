@@ -26,25 +26,26 @@ Imagine you are a **Chef** in a kitchen.
 
 ### 🗺️ Mindmap: IoC & DI Overview
 
-```mermaid
-mindmap
-  root((IoC & DI))
-    IoC(Inversion of Control)
-      Principle("Don't call us, we'll call you")
-      Goal(Loose Coupling)
-      Manager(Spring Container)
-    DI(Dependency Injection)
-      Constructor(Constructor Injection)
-        style Constructor color:#00ff00
-        Final(Final Fields)
-        Testing(Easy to Mock)
-      Setter(Setter Injection)
-        Optional(Optional Deps)
-        Changeable(Changeable at Runtime)
-      Field(Field Injection)
-        style Field color:#ff0000
-        Reflection(Uses Reflection)
-        Testing(Hard to Test)
+## 🏗️ Architecture Diagram
+
+> [!TIP]
+> **Interview Pro-Tip: "What is the biggest benefit of IoC?"**
+> It's **Testability**. Because the container manages dependencies, you can easily swap real services for "Mocks" during unit testing. This allows you to test your business logic in isolation without needing a database or external API.
+
+### 🔍 Deep Dive: The BeanFactoryPostProcessor
+While `BeanPostProcessor` works on bean **instances**, `BeanFactoryPostProcessor` works on the **Bean Definitions** themselves. This is how `${property}` placeholders are resolved. Spring reads the definitions, and a `PropertySourcesPlaceholderConfigurer` (a BFPP) replaces the placeholders with actual values from your properties file before any beans are created.
+
+### 🛠️ Complex Example: Custom BeanFactoryPostProcessor
+```java
+@Component
+public class MyCustomBFPP implements BeanFactoryPostProcessor {
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory factory) {
+        BeanDefinition bd = factory.getBeanDefinition("myService");
+        // Dynamically change the scope of a bean at runtime!
+        bd.setScope("prototype");
+    }
+}
 ```
 
 ### What is Inversion of Control (IoC)?
@@ -169,25 +170,7 @@ Think of the Spring Container as a **Smart Warehouse**.
 
 ### 🗺️ Mindmap: Spring Container
 
-```mermaid
-mindmap
-  root((Spring Container))
-    Types
-      BeanFactory
-        Lazy(Lazy Loading)
-        Lightweight(Resource Constrained)
-      ApplicationContext
-        Eager(Eager Loading)
-        Features
-          I18n(Internationalization)
-          Events(Event Publication)
-          AOP(AOP Integration)
-    Responsibilities
-      Creation(Bean Creation)
-      Wiring(Dependency Injection)
-      Lifecycle(Lifecycle Management)
-      Config(Configuration Management)
-```
+## 🏗️ Architecture Diagram
 
 ### What is Spring Container?
 
@@ -272,24 +255,7 @@ Think of a Spring Bean as a **New Employee** joining a company:
 
 ### 🗺️ Mindmap: Bean Lifecycle
 
-```mermaid
-graph TD
-    Start((Start)) --> Inst[1. Instantiation]
-    Inst --> Pop[2. Populate Properties]
-    Pop --> Aware[3. Aware Interfaces]
-    Aware --> BPP_Before[4. BPP BeforeInit]
-    BPP_Before --> PostConstruct[5. @PostConstruct]
-    PostConstruct --> InitBean[6. afterPropertiesSet]
-    InitBean --> CustomInit[7. Custom Init]
-    CustomInit --> BPP_After[8. BPP AfterInit]
-    BPP_After --> Ready((Bean Ready))
-    Ready --> PreDestroy[9. @PreDestroy]
-    PreDestroy --> Disposable[10. DisposableBean]
-    Disposable --> CustomDestroy[11. Custom Destroy]
-    CustomDestroy --> End((End))
-
-    style Ready fill:#f9f,stroke:#333,stroke-width:4px
-```
+## 🌱 Bean Lifecycle
 
 ### Complete Bean Lifecycle
 
@@ -413,23 +379,7 @@ public class MyBean implements ApplicationContextAware, BeanNameAware {
 
 ### 🗺️ Mindmap: Bean Scopes
 
-```mermaid
-mindmap
-  root((Bean Scopes))
-    Standard
-      Singleton
-        Default(Default)
-        One(One per Container)
-        Shared(Shared Instance)
-      Prototype
-        New(New per Request)
-        Lifecycle(Not fully managed)
-    Web_Only
-      Request(One per HTTP Request)
-      Session(One per HTTP Session)
-      Application(One per ServletContext)
-      WebSocket(One per WebSocket)
-```
+## 🏗️ Architecture Diagram
 
 ### Available Scopes
 
@@ -729,6 +679,10 @@ public class AppConfig {
 
 ## Spring Expression Language (SpEL)
 
+## 🏗️ Architecture Diagram
+
+## Spring Expression Language (SpEL)
+
 SpEL is a powerful expression language that supports querying and manipulating an object graph at runtime.
 
 ### Key Features
@@ -771,6 +725,35 @@ String message = (String) exp.getValue();
 
 ## Circular Dependencies
 
+## 🏗️ Architecture Diagram
+
+> [!TIP]
+> **Interview Pro-Tip: "How does Spring handle circular dependencies?"**
+> Spring uses a **3-Level Cache** (Singleton Objects, Early Singleton Objects, and Singleton Factories). When Bean A is being created, it's put into the "Early Singleton Objects" cache before it's fully initialized. If Bean B then needs Bean A, it can get this "partially created" version, breaking the cycle. **Note: This only works for Setter Injection, not Constructor Injection.**
+
+### 🔍 Deep Dive: Spring AOP Internals
+Spring AOP uses two types of proxies:
+1. **JDK Dynamic Proxy**: Used if the target class implements an interface. It creates a proxy that implements the same interface.
+2. **CGLIB Proxy**: Used if the target class does *not* implement an interface. It creates a subclass of the target class at runtime.
+
+### 🛠️ Complex Example: AOP with Custom Annotation
+```java
+@Aspect
+@Component
+public class LoggingAspect {
+    @Around("@annotation(LogExecutionTime)")
+    public Object logTime(ProceedingJoinPoint joinPoint) throws Throwable {
+        long start = System.currentTimeMillis();
+        Object proceed = joinPoint.proceed();
+        long executionTime = System.currentTimeMillis() - start;
+        System.out.println(joinPoint.getSignature() + " executed in " + executionTime + "ms");
+        return proceed;
+    }
+}
+```
+
+## Circular Dependencies
+
 ### What is a Circular Dependency?
 A circular dependency occurs when Bean A depends on Bean B, and Bean B depends on Bean A.
 
@@ -786,6 +769,28 @@ public class B {
     private final A a;
     public B(A a) { this.a = a; }
 }
+```
+
+### How Spring Handles It (The 3-Level Cache)
+
+```mermaid
+sequenceDiagram
+    participant C as Container
+    participant A as Bean A
+    participant B as Bean B
+    participant L3 as 3rd Level Cache
+    participant L2 as 2nd Level Cache
+    participant L1 as 1st Level Cache
+
+    C->>A: Create A
+    A->>L3: Put Factory for A
+    A->>B: Need B
+    B->>L3: Get Factory for A
+    L3->>L2: Move A to 2nd Level
+    B->>A: Inject A (Partially Initialized)
+    B->>L1: Fully Initialized B
+    A->>B: Inject B
+    A->>L1: Fully Initialized A
 ```
 
 ### How Spring Handles It (The 3-Level Cache)

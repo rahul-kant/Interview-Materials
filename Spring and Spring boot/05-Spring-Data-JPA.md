@@ -32,22 +32,30 @@ Imagine you speak **English** (Java Objects), but your friend only speaks **Fren
 
 ### 🗺️ Mindmap: JPA Architecture
 
-```mermaid
-mindmap
-  root((Spring Data JPA))
-    Layers
-      Spring_Data_JPA(Spring Data JPA - Abstraction)
-      JPA_API(JPA API - Specification)
-      Hibernate(Hibernate - Implementation)
-      JDBC(JDBC - Low Level)
-    Core_Concepts
-      Entity(Entity - Table Mapping)
-      EntityManager(EntityManager - Persistence Context)
-      Repository(Repository - Data Access)
-    Features
-      JPQL(JPQL - Object Queries)
-      Criteria_API(Criteria API - Dynamic Queries)
-      Transactions(Transaction Management)
+## 💾 JPA Architecture
+
+> [!TIP]
+> **Interview Pro-Tip: "What is the difference between save() and saveAndFlush()?"**
+> - **save()**: Usually just saves the entity to the Persistence Context (L1 Cache). The actual SQL `INSERT`/`UPDATE` might happen later (at the end of the transaction).
+> - **saveAndFlush()**: Saves the entity AND immediately pushes the changes to the database. Use this if you need the DB to trigger something (like an auto-increment ID or a trigger) immediately.
+
+### 🔍 Deep Dive: How Repositories Work (Proxies)
+When you create an interface like `UserRepository`, Spring doesn't "generate code" at compile time. Instead, at runtime, it uses **JDK Dynamic Proxies**. It creates a proxy object that implements your interface. When you call `findByUsername()`, the proxy intercepts the call, parses the method name, generates the JPQL/SQL, and executes it via the `EntityManager`.
+
+### 🛠️ Complex Example: Native Query with Projections
+```java
+public interface UserStatsProjection {
+    String getUsername();
+    Long getOrderCount();
+}
+
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    @Query(value = "SELECT u.username as username, COUNT(o.id) as orderCount " +
+                   "FROM users u LEFT JOIN orders o ON u.id = o.user_id " +
+                   "GROUP BY u.username", nativeQuery = true)
+    List<UserStatsProjection> getUserStats();
+}
 ```
 
 ## JPA Fundamentals
@@ -294,26 +302,7 @@ public class User {
 
 ### 🗺️ Mindmap: JPA Relationships
 
-```mermaid
-mindmap
-  root((Relationships))
-    OneToOne
-      UniDirectional
-      BiDirectional(mappedBy)
-    OneToMany_ManyToOne
-      Owner(Many side is usually Owner)
-      Inverse(One side uses mappedBy)
-    ManyToMany
-      JoinTable(Requires Join Table)
-    Fetch_Types
-      Lazy(Lazy - Load on demand)
-      Eager(Eager - Load immediately)
-    Cascading
-      Persist
-      Merge
-      Remove
-      All
-```
+## 💾 JPA Architecture
 
 ## Relationships
 
@@ -611,6 +600,10 @@ User getReferenceById(Long id); // JPA 3.0+
 ```
 
 ---
+
+## Query Methods
+
+## 💾 JPA Architecture
 
 ## Query Methods
 

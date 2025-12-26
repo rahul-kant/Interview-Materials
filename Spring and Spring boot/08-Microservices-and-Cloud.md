@@ -24,22 +24,32 @@
 
 ### 🗺️ Mindmap: Microservices Overview
 
-```mermaid
-mindmap
-  root((Microservices))
-    Principles
-      Independence(Independently Deployable)
-      Single_Responsibility(Single Responsibility)
-      Decentralized(Decentralized Data)
-    Challenges
-      Complexity(Operational Complexity)
-      Consistency(Data Consistency)
-      Network(Network Latency)
-    Patterns
-      Discovery(Service Discovery)
-      Gateway(API Gateway)
-      Resilience(Circuit Breakers)
-      Config(Centralized Config)
+## ☁️ Microservices Architecture
+
+> [!TIP]
+> **Interview Pro-Tip: "How do you handle distributed transactions?"**
+> Don't say "Two-Phase Commit" (2PC) - it's too slow for microservices. Instead, talk about the **Saga Pattern**. Explain how you break a large transaction into smaller, local transactions, and use "Compensating Transactions" (undo actions) if one step fails.
+
+### 🔍 Deep Dive: Spring Cloud Gateway & Netty
+Unlike Zuul (which was blocking), Spring Cloud Gateway is built on **Spring WebFlux** and **Netty**. It uses a non-blocking, event-loop model. This means it can handle thousands of concurrent connections with a very small number of threads, making it much more efficient for high-traffic environments.
+
+### 🛠️ Complex Example: Advanced Resilience4j Config
+```yaml
+resilience4j:
+  circuitbreaker:
+    instances:
+      backendA:
+        registerHealthIndicator: true
+        slidingWindowSize: 100
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10000
+        permittedNumberOfCallsInHalfOpenState: 10
+  ratelimiter:
+    instances:
+      backendA:
+        limitForPeriod: 10
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0
 ```
 
 ## Microservices Architecture
@@ -78,6 +88,10 @@ Spring Cloud provides tools for developers to quickly build some of the common p
 ---
 
 ---
+
+## Service Discovery (Eureka)
+
+## 🏗️ Architecture Diagram
 
 ## Service Discovery (Eureka)
 
@@ -175,6 +189,10 @@ eureka:
 ---
 
 ---
+
+## API Gateway (Spring Cloud Gateway)
+
+## 🏗️ Architecture Diagram
 
 ## API Gateway (Spring Cloud Gateway)
 
@@ -312,6 +330,10 @@ spring:
 ---
 
 ---
+
+## Circuit Breakers (Resilience4j)
+
+## 🏗️ Architecture Diagram
 
 ## Circuit Breakers (Resilience4j)
 
