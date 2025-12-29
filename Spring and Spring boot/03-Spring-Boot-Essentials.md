@@ -1280,6 +1280,159 @@ Spring Boot 3 introduces a new "Observability" API built on **Micrometer**. It c
 
 ---
 
+---
+
+## Advanced: Spring Boot Internals
+
+### 1. Auto-Configuration Report Deep Dive
+
+#### Why use the Auto-Configuration Report?
+When Spring Boot's "magic" doesn't work as expected, or when you want to understand why a certain bean was (or wasn't) created, the Auto-Configuration Report is your primary diagnostic tool.
+
+#### How to Generate the Report
+1. **Command Line**: Pass the `--debug` flag:
+   ```bash
+   java -jar myapp.jar --debug
+   ```
+2. **application.properties**:
+   ```properties
+   debug=true
+   ```
+3. **VM Options**:
+   ```bash
+   -Ddebug
+   ```
+
+#### Interpreting the Report
+The report is divided into several sections:
+
+**Positive Matches**: 
+Configurations that were applied because all their `@Conditional` requirements were met.
+```text
+  AopAutoConfiguration matched:
+     - @ConditionalOnProperty (spring.aop.auto=true) matched (OnPropertyCondition)
+     - @ConditionalOnClass (org.aspectj.weaver.Advice) matched (OnClassCondition)
+```
+
+**Negative Matches**: 
+Configurations that were skipped and the exact reason why.
+```text
+  ActiveMQAutoConfiguration:
+     Did not match:
+        - @ConditionalOnClass (javax.jms.ConnectionFactory) did not find required class 'javax.jms.ConnectionFactory' (OnClassCondition)
+```
+
+**Unconditional Classes**: 
+Auto-configurations that don't have `@Conditional` annotations and are always applied.
+
+#### 🧠 ELI5: The "Filter Logic"
+Imagine you are a **Bouncer** at a club (Spring Boot). You have a list of **VIPS** (Auto-configurations).
+For each VIP, there is a set of **Rules** (Conditions):
+*   "Only entry if they are wearing a suit" (`@ConditionalOnClass`)
+*   "Only entry if they have a gold card" (`@ConditionalOnProperty`)
+The **Auto-Configuration Report** is the bouncer's logbook explaining exactly who got in and why the others were rejected.
+
+---
+
+### 2. Failure Analyzers
+
+#### What are Failure Analyzers?
+If your application fails to start, Spring Boot uses `FailureAnalyzer` to intercept the exception and provide a clear, user-friendly error message instead of a giant, intimidating stack trace.
+
+#### How they work
+1. Spring Boot catches a startup exception.
+2. It looks for all registered `FailureAnalyzer` implementations in `META-INF/spring.factories`.
+3. The analyzers check if they can handle the exception.
+4. If yes, they return a `FailureAnalysis` containing a **Description** and an **Action**.
+
+**Standard Failure Example:**
+```text
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+Web server failed to start. Port 8080 was already in use.
+
+Action:
+Identify and stop the process that's listening on port 8080 or configure this application to listen on another port.
+```
+
+#### Creating a Custom Failure Analyzer
+You can create your own analyzer for custom business exceptions.
+
+```java
+public class MyBusinessFailureAnalyzer extends AbstractFailureAnalyzer<MyBusinessException> {
+    @Override
+    protected FailureAnalysis analyze(Throwable rootFailure, MyBusinessException cause) {
+        return new FailureAnalysis(
+            "Service failed due to missing license key.",
+            "Please obtain a license key from the portal and set it in 'app.license-key' property.",
+            cause
+        );
+    }
+}
+```
+
+**Registration**:
+Add to `META-INF/spring.factories`:
+```properties
+org.springframework.boot.diagnostics.FailureAnalyzer=com.example.MyBusinessFailureAnalyzer
+```
+
+---
+
+### 3. Banner Customization
+
+#### Customizing the Startup Banner
+Spring Boot allows you to replace the default "Spring" ASCII art with your own.
+
+**Method 1: `banner.txt` (Static)**
+Place a `banner.txt` file in `src/main/resources`. Spring Boot will automatically pick it up.
+
+**Features of `banner.txt`**:
+*   **Colors**: Use `${AnsiColor.RED}`, `${AnsiBackground.BLUE}`, etc.
+*   **Application Info**: `${application.version}`, `${application.title}`.
+*   **Spring Boot Version**: `${spring-boot.version}`.
+
+**Example `banner.txt`**:
+```text
+${AnsiColor.BRIGHT_CYAN}
+  __  __         _                    
+ |  \/  |_ _ ___| |_ ___ __ _ __ ___ 
+ | |\/| | '_/ -_)  _/ _ / _` | '  \ _\
+ |_|  |_|_| \___|\__\___/\__, |_|_|_/_/
+                         |___/         
+${AnsiColor.DEFAULT}
+Version: ${application.version}
+Spring Boot: ${spring-boot-version}
+```
+
+**Method 2: Programmatic (Dynamic)**
+You can set a custom banner implementation in your main class.
+
+```java
+public static void main(String[] args) {
+    SpringApplication app = new SpringApplication(MyApplication.class);
+    app.setBanner((environment, sourceClass, out) -> {
+        out.println("Custom Dynamic Banner: " + environment.getProperty("java.version"));
+    });
+    app.run(args);
+}
+```
+
+**Method 3: Banner Images**
+You can even use images (`banner.gif`, `banner.jpg`, `banner.png`). Spring Boot will convert them into ASCII art!
+
+#### Turning it off
+```yaml
+spring:
+  main:
+    banner-mode: "off" # Options: console, log, off
+```
+
+---
+
 ## Best Practices
 
 1. ✅ **Use YAML over properties** for hierarchical configuration

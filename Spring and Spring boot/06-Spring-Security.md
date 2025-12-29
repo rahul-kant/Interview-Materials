@@ -974,6 +974,584 @@ If a JWT is stolen, the attacker has access until it expires. If it's short-live
 3.  **Rotation**: Every time a Refresh Token is used, the server issues a **NEW** Refresh Token and invalidates the old one.
 4.  **Detection**: If an old Refresh Token is used, the server assumes a breach and invalidates **ALL** tokens for that user.
 
+### Complete JWT Security Best Practices Implementation
+
+#### 1. Enhanced JWT Token Provider
+
+```java
+@Component
+@Slf4j
+public class SecureJwtTokenProvider {
+    
+    @Value("${jwt.secret}")
+    private String jwtSecret;
+    
+    @Value("${jwt.access-token-expiration:900000}") // 15 minutes
+    private long accessTokenExpiration;
+    
+    @Value("${jwt.refresh-token-expiration:604800000}") // 7 days
+    private long refreshTokenExpiration;
+    
+    @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+    
+    /**
+     * Generate Access Token with claims
+     */
+    public String generateAccessToken(Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", ((CustomUserDetails) userDetails).getId());
+        claims.put("roles", userDetails.getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority)
+            .collect(Collectors.toList()));
+        claims.put("tokenType", "ACCESS");
+        
+        return Jwts.builder()
+            .setClaims(claims)
+            .setSubject(userDetails.getUsername())
+            .setIssuedAt(new Date())
+            .setExpiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
+            .setId(UUID.randomUUID().toString()) // Unique token ID (jti)
+            .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+            .compact();
+    }
+    
+    /**
+     * Generate Refresh Token with rotation
+     */
+    public String generateRefreshToken(Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        String username = userDetails.getUsername();
+        
+        // Create refresh token
+        String token = Jwts.builder()
+            .setSubject(username)
+            .setIssuedAt(new Date())
+            .setExpiration(new Date(System.currentTimeMillis() + refreshTokenExpiration))
+            .setId(UUID.randomUUID().toString())
+            .claim("tokenType", "REFRESH")
+            .signWith(getSigningKey(), SignatureAlgorithm.HS512)
+            .compact();
+        
+        // Store in database for rotation tracking
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setToken(token);
+        refreshToken.setUsername(username);
+        refreshToken.setExpiryDate(new Date(System.currentTimeMillis() + refreshTokenExpiration));
+        refreshToken.setUsed(false);
+        refreshTokenRepository.save(refreshToken);
+        
+        return token;
+    }
+    
+    /**
+     * Refresh Access Token with rotation
+     */
+    public TokenRefreshResponse refreshAccessToken(String refreshToken) {
+        // Validate refresh token
+        if (!validateToken(refreshToken)) {
+            throw new TokenRefreshException("Invalid refresh token");
+        }
+        
+        // Check if token exists and not used
+        RefreshToken storedToken = refreshTokenRepository.findByToken(refreshToken)
+            .orElseThrow(() -> new TokenRefreshException("Refresh token not found"));
+        
+        // Check if already used (possible attack)
+        if (storedToken.isUsed()) {
+            log.error("Refresh token reuse detected! Invalidating all tokens for user: {}", 
+                storedToken.getUsername());
+            // Invalidate all tokens for this user
+            refreshTokenRepository.deleteAllByUsername(storedToken.getUsername());
+            throw new TokenRefreshException("Token reuse detected. All tokens invalidated.");
+        }
+        
+        // Mark as used
+        storedToken.setUsed(true);
+        refreshTokenRepository.save(storedToken);
+        
+        // Generate new tokens
+        String username = getUsernameFromToken(refreshToken);
+        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+            userDetails, null, userDetails.getAuthorities()
+        );
+        
+        String newAccessToken = generateAccessToken(authentication);
+        String newRefreshToken = generateRefreshToken(authentication);
+        
+        return new TokenRefreshResponse(newAccessToken, newRefreshToken);
+    }
+    
+    /**
+     * Revoke all tokens for a user
+     */
+    public void revokeAllUserTokens(String username) {
+        refreshTokenRepository.deleteAllByUsername(username);
+    }
+    
+    /**
+     * Validate token with comprehensive checks
+     */
+    public boolean validateToken(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+            
+            // Check expiration
+            if (claims.getExpiration().before(new Date())) {
+                log.warn("Token expired");
+                return false;
+            }
+            
+            // Check if token is in blacklist (for logout)
+            String jti = claims.getId();
+            if (isTokenBlacklisted(jti)) {
+                log.warn("Token is blacklisted");
+                return false;
+            }
+            
+            return true;
+            
+        } catch (SecurityException | MalformedJwtException e) {
+            log.error("Invalid JWT signature: {}", e.getMessage());
+        } catch (ExpiredJwtException e) {
+            log.error("JWT token is expired: {}", e.getMessage());
+        } catch (UnsupportedJwtException e) {
+            log.error("JWT token is unsupported: {}", e.getMessage());
+        } catch (IllegalArgumentException e) {
+            log.error("JWT claims string is empty: {}", e.getMessage());
+        }
+        return false;
+    }
+    
+    /**
+     * Extract claims with type safety
+     */
+    public Claims getClaimsFromToken(String token) {
+        return Jwts.parserBuilder()
+            .setSigningKey(getSigningKey())
+            .build()
+            .parseClaimsJws(token)
+            .getBody();
+    }
+    
+    public String getUsernameFromToken(String token) {
+        return getClaimsFromToken(token).getSubject();
+    }
+    
+    public Long getUserIdFromToken(String token) {
+        return getClaimsFromToken(token).get("userId", Long.class);
+    }
+    
+    @SuppressWarnings("unchecked")
+    public List<String> getRolesFromToken(String token) {
+        return getClaimsFromToken(token).get("roles", List.class);
+    }
+    
+    private Key getSigningKey() {
+        byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+    
+    private boolean isTokenBlacklisted(String jti) {
+        // Check Redis or database for blacklisted tokens
+        return redisTemplate.hasKey("blacklist:" + jti);
+    }
+}
+```
+
+#### 2. Refresh Token Entity
+
+```java
+@Entity
+@Table(name = "refresh_tokens")
+@Data
+public class RefreshToken {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(nullable = false, unique = true, length = 500)
+    private String token;
+    
+    @Column(nullable = false)
+    private String username;
+    
+    @Column(nullable = false)
+    private Date expiryDate;
+    
+    @Column(nullable = false)
+    private boolean used = false;
+    
+    @Column(nullable = false)
+    private Date createdAt = new Date();
+    
+    @Column
+    private String deviceInfo; // Track which device
+    
+    @Column
+    private String ipAddress; // Track IP for security
+}
+
+public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
+    Optional<RefreshToken> findByToken(String token);
+    void deleteAllByUsername(String username);
+    List<RefreshToken> findAllByUsernameAndUsedFalse(String username);
+}
+```
+
+#### 3. Token Blacklist Service (for Logout)
+
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class TokenBlacklistService {
+    
+    private final StringRedisTemplate redisTemplate;
+    
+    /**
+     * Blacklist token until it expires
+     */
+    public void blacklistToken(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+            
+            String jti = claims.getId();
+            Date expiration = claims.getExpiration();
+            
+            // Calculate TTL
+            long ttl = expiration.getTime() - System.currentTimeMillis();
+            
+            if (ttl > 0) {
+                redisTemplate.opsForValue().set(
+                    "blacklist:" + jti,
+                    "true",
+                    Duration.ofMilliseconds(ttl)
+                );
+                log.info("Token blacklisted: {}", jti);
+            }
+        } catch (Exception e) {
+            log.error("Error blacklisting token", e);
+        }
+    }
+    
+    public boolean isBlacklisted(String jti) {
+        return Boolean.TRUE.equals(
+            redisTemplate.hasKey("blacklist:" + jti)
+        );
+    }
+}
+```
+
+#### 4. Enhanced Auth Controller with Refresh
+
+```java
+@RestController
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
+@Slf4j
+public class AuthController {
+    
+    private final AuthenticationManager authenticationManager;
+    private final SecureJwtTokenProvider tokenProvider;
+    private final TokenBlacklistService blacklistService;
+    private final UserRepository userRepository;
+    
+    @PostMapping("/login")
+    public ResponseEntity<JwtAuthResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
+        
+        // Authenticate
+        Authentication authentication = authenticationManager.authenticate(
+            new UsernamePasswordAuthenticationToken(
+                request.getUsername(),
+                request.getPassword()
+            )
+        );
+        
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        
+        // Generate tokens
+        String accessToken = tokenProvider.generateAccessToken(authentication);
+        String refreshToken = tokenProvider.generateRefreshToken(authentication);
+        
+        // Log login
+        log.info("User logged in: {} from IP: {}", 
+            request.getUsername(), 
+            httpRequest.getRemoteAddr());
+        
+        return ResponseEntity.ok(new JwtAuthResponse(
+            accessToken,
+            refreshToken,
+            "Bearer",
+            15 * 60 // 15 minutes
+        ));
+    }
+    
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenRefreshResponse> refreshToken(
+            @Valid @RequestBody TokenRefreshRequest request) {
+        
+        try {
+            TokenRefreshResponse response = tokenProvider.refreshAccessToken(
+                request.getRefreshToken()
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (TokenRefreshException e) {
+            log.error("Token refresh failed: {}", e.getMessage());
+            return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(null);
+        }
+    }
+    
+    @PostMapping("/logout")
+    public ResponseEntity<MessageResponse> logout(
+            @RequestHeader("Authorization") String authHeader) {
+        
+        try {
+            // Extract token
+            String token = authHeader.substring(7);
+            
+            // Blacklist access token
+            blacklistService.blacklistToken(token);
+            
+            // Get username and revoke all refresh tokens
+            String username = tokenProvider.getUsernameFromToken(token);
+            tokenProvider.revokeAllUserTokens(username);
+            
+            log.info("User logged out: {}", username);
+            
+            return ResponseEntity.ok(
+                new MessageResponse("Logout successful")
+            );
+            
+        } catch (Exception e) {
+            log.error("Logout failed", e);
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new MessageResponse("Logout failed"));
+        }
+    }
+    
+    @PostMapping("/revoke-all")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<MessageResponse> revokeAllTokens(Principal principal) {
+        tokenProvider.revokeAllUserTokens(principal.getName());
+        log.info("All tokens revoked for user: {}", principal.getName());
+        
+        return ResponseEntity.ok(
+            new MessageResponse("All tokens revoked successfully")
+        );
+    }
+}
+
+@Data
+class JwtAuthResponse {
+    private String accessToken;
+    private String refreshToken;
+    private String tokenType;
+    private long expiresIn;
+}
+
+@Data
+class TokenRefreshRequest {
+    @NotBlank
+    private String refreshToken;
+}
+
+@Data
+@AllArgsConstructor
+class TokenRefreshResponse {
+    private String accessToken;
+    private String refreshToken;
+}
+```
+
+#### 5. XSS and CSRF Protection
+
+```java
+@Configuration
+public class SecurityHeadersConfig {
+    
+    @Bean
+    public SecurityFilterChain securityHeaders(HttpSecurity http) throws Exception {
+        http.headers(headers -> headers
+            // Prevent XSS attacks
+            .xssProtection(xss -> xss.headerValue(
+                XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK
+            ))
+            
+            // Prevent clickjacking
+            .frameOptions(frame -> frame.deny())
+            
+            // Content Security Policy
+            .contentSecurityPolicy(csp -> csp.policyDirectives(
+                "default-src 'self'; " +
+                "script-src 'self' 'unsafe-inline'; " +
+                "style-src 'self' 'unsafe-inline'; " +
+                "img-src 'self' data: https:; " +
+                "font-src 'self' data:; " +
+                "connect-src 'self'"
+            ))
+            
+            // HSTS - Force HTTPS
+            .httpStrictTransportSecurity(hsts -> hsts
+                .includeSubDomains(true)
+                .maxAgeInSeconds(31536000) // 1 year
+            )
+            
+            // Prevent MIME sniffing
+            .contentTypeOptions(Customizer.withDefaults())
+            
+            // Referrer Policy
+            .referrerPolicy(referrer -> referrer.policy(
+                ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN
+            ))
+            
+            // Permissions Policy
+            .permissionsPolicy(permissions -> permissions.policy(
+                "geolocation=(), camera=(), microphone=()"
+            ))
+        );
+        
+        return http.build();
+    }
+}
+```
+
+#### 6. Configuration
+
+```yaml
+# application.yml
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-change-in-production}
+  access-token-expiration: 900000      # 15 minutes
+  refresh-token-expiration: 604800000  # 7 days
+
+spring:
+  redis:
+    host: localhost
+    port: 6379
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/myapp
+    username: user
+    password: password
+```
+
+#### 7. Testing JWT Security
+
+```java
+@SpringBootTest
+@AutoConfigureMockMvc
+class JwtSecurityTest {
+    
+    @Autowired
+    private MockMvc mockMvc;
+    
+    @Autowired
+    private SecureJwtTokenProvider tokenProvider;
+    
+    @Test
+    void shouldGenerateAndValidateAccessToken() {
+        // Create authentication
+        UserDetails userDetails = User.builder()
+            .username("testuser")
+            .password("password")
+            .authorities("ROLE_USER")
+            .build();
+        
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+            userDetails, null, userDetails.getAuthorities()
+        );
+        
+        // Generate token
+        String token = tokenProvider.generateAccessToken(auth);
+        
+        // Validate
+        assertTrue(tokenProvider.validateToken(token));
+        assertEquals("testuser", tokenProvider.getUsernameFromToken(token));
+    }
+    
+    @Test
+    void shouldRejectExpiredToken() throws Exception {
+        // Create expired token
+        String expiredToken = Jwts.builder()
+            .setSubject("testuser")
+            .setExpiration(new Date(System.currentTimeMillis() - 1000))
+            .signWith(Keys.hmacShaKeyFor("secret".getBytes()))
+            .compact();
+        
+        assertFalse(tokenProvider.validateToken(expiredToken));
+    }
+    
+    @Test
+    void shouldDetectTokenReuse() throws Exception {
+        // Login
+        String loginJson = "{\"username\":\"user\",\"password\":\"pass\"}";
+        
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(loginJson))
+            .andExpect(status().isOk())
+            .andReturn();
+        
+        String responseBody = result.getResponse().getContentAsString();
+        JsonNode node = new ObjectMapper().readTree(responseBody);
+        String refreshToken = node.get("refreshToken").asText();
+        
+        // Use refresh token
+        mockMvc.perform(post("/api/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"" + refreshToken + "\"}"))
+            .andExpect(status().isOk());
+        
+        // Try to reuse same refresh token (should fail)
+        mockMvc.perform(post("/api/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"" + refreshToken + "\"}"))
+            .andExpect(status().isForbidden());
+    }
+}
+```
+
+### JWT Security Best Practices Summary
+
+✅ **1. Short-lived Access Tokens**: 15 minutes or less  
+✅ **2. Refresh Token Rotation**: New refresh token on each use  
+✅ **3. Token Revocation**: Blacklist on logout  
+✅ **4. Reuse Detection**: Invalidate all tokens if reuse detected  
+✅ **5. Secure Storage**: Store refresh tokens in database  
+✅ **6. Claims Validation**: Validate all claims (exp, iat, jti)  
+✅ **7. HTTPS Only**: Never send tokens over HTTP  
+✅ **8. HttpOnly Cookies**: For web apps, use HttpOnly cookies  
+✅ **9. XSS Protection**: Sanitize all inputs  
+✅ **10. CSRF Protection**: Use CSRF tokens for state-changing operations
+
+### Interview Tips for JWT Security
+
+**Q: How do you prevent JWT token theft?**
+> "I use multiple layers: short-lived access tokens (15min), refresh token rotation to detect reuse, token blacklisting on logout, HTTPS only, HttpOnly cookies for web, and comprehensive security headers. If token reuse is detected, I invalidate all tokens for that user and alert the security team."
+
+**Q: What's the difference between access and refresh tokens?**
+> "Access tokens are short-lived (15min) and contain user claims for authorization. Refresh tokens are long-lived (7 days), stored in database, and used only to get new access tokens. This limits the damage if an access token is stolen while providing good UX without frequent logins."
+
 ---
 
 ## CSRF & CORS Deep Dive
@@ -1126,27 +1704,293 @@ http.headers(headers -> headers
 );
 ```
 
-### Rate Limiting
+### Rate Limiting Strategies
+
+## 🔒 Rate Limiting Deep Dive
+
+Rate limiting protects your API from abuse, prevents resource exhaustion, and ensures fair usage among clients.
+
+#### Why Rate Limiting?
+
+**Without Rate Limiting**:
+```
+User A: Makes 10,000 requests/second → Server crashes 💥
+User B: Can't access API → Bad UX 😞
+Cost: High server resources → Expensive 💸
+```
+
+**With Rate Limiting**:
+```
+User A: Limited to 100 requests/second → Fair usage ✅
+User B: Gets guaranteed service → Good UX 😊
+Cost: Optimized resources → Cost-effective 💰
+```
+
+#### Rate Limiting Algorithms
+
+##### 1. Token Bucket Algorithm (Recommended)
+
+**How it works**:
+- Bucket holds tokens (capacity = max burst)
+- Tokens added at fixed rate (refill rate)
+- Each request consumes 1 token
+- If no tokens available, request is rejected
+
+**Pros**: Allows burst traffic, smooth rate limiting  
+**Cons**: Slightly more complex
 
 ```java
 @Component
+@Slf4j
+public class TokenBucketRateLimiter {
+    
+    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    
+    // Using Bucket4j library
+    public boolean allowRequest(String clientId, int tokensPerMinute) {
+        Bucket bucket = buckets.computeIfAbsent(clientId, k -> {
+            Bandwidth limit = Bandwidth.builder()
+                .capacity(tokensPerMinute)
+                .refillGreedy(tokensPerMinute, Duration.ofMinutes(1))
+                .build();
+            
+            return Bucket.builder()
+                .addLimit(limit)
+                .build();
+        });
+        
+        return bucket.tryConsume(1);
+    }
+    
+    public ConsumptionProbe probe(String clientId) {
+        Bucket bucket = buckets.get(clientId);
+        return bucket != null ? bucket.tryConsumeAndReturnRemaining(1) : null;
+    }
+}
+```
+
+##### 2. Fixed Window Counter
+
+**How it works**:
+- Count requests in fixed time windows (e.g., per minute)
+- Reset counter at window boundary
+- Simple but can allow burst at window edges
+
+```java
+@Component
+public class FixedWindowRateLimiter {
+    
+    private final Map<String, WindowCounter> counters = new ConcurrentHashMap<>();
+    
+    public boolean allowRequest(String clientId, int maxRequests, Duration window) {
+        long now = System.currentTimeMillis();
+        long windowStart = now - window.toMillis();
+        
+        WindowCounter counter = counters.computeIfAbsent(clientId, 
+            k -> new WindowCounter());
+        
+        synchronized (counter) {
+            // Reset if window expired
+            if (counter.windowStart < windowStart) {
+                counter.count = 0;
+                counter.windowStart = now;
+            }
+            
+            if (counter.count < maxRequests) {
+                counter.count++;
+                return true;
+            }
+            return false;
+        }
+    }
+    
+    @Data
+    private static class WindowCounter {
+        private int count = 0;
+        private long windowStart = System.currentTimeMillis();
+    }
+}
+```
+
+##### 3. Sliding Window Log
+
+**How it works**:
+- Keep log of all request timestamps
+- Count requests in sliding window
+- Most accurate but memory intensive
+
+```java
+@Component
+public class SlidingWindowRateLimiter {
+    
+    private final Map<String, Queue<Long>> requestLogs = new ConcurrentHashMap<>();
+    
+    public boolean allowRequest(String clientId, int maxRequests, Duration window) {
+        long now = System.currentTimeMillis();
+        long windowStart = now - window.toMillis();
+        
+        Queue<Long> log = requestLogs.computeIfAbsent(clientId, 
+            k -> new ConcurrentLinkedQueue<>());
+        
+        // Remove old entries
+        log.removeIf(timestamp -> timestamp < windowStart);
+        
+        if (log.size() < maxRequests) {
+            log.offer(now);
+            return true;
+        }
+        return false;
+    }
+}
+```
+
+#### Complete Rate Limiting Implementation
+
+##### 1. Redis-Based Distributed Rate Limiter
+
+```java
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class RedisRateLimiter {
+    
+    private final StringRedisTemplate redisTemplate;
+    
+    /**
+     * Token bucket algorithm using Redis
+     */
+    public boolean allowRequest(String key, int maxRequests, int windowSeconds) {
+        String redisKey = "rate_limit:" + key;
+        Long currentTime = System.currentTimeMillis();
+        Long windowStart = currentTime - (windowSeconds * 1000L);
+        
+        try {
+            // Remove old entries
+            redisTemplate.opsForZSet().removeRangeByScore(redisKey, 0, windowStart);
+            
+            // Count requests in current window
+            Long count = redisTemplate.opsForZSet().zCard(redisKey);
+            
+            if (count == null || count < maxRequests) {
+                // Add current request
+                redisTemplate.opsForZSet().add(redisKey, 
+                    UUID.randomUUID().toString(), currentTime);
+                
+                // Set expiry
+                redisTemplate.expire(redisKey, 
+                    Duration.ofSeconds(windowSeconds));
+                
+                return true;
+            }
+            
+            log.warn("Rate limit exceeded for key: {}", key);
+            return false;
+            
+        } catch (Exception e) {
+            log.error("Error checking rate limit", e);
+            // Fail open - allow request if Redis is down
+            return true;
+        }
+    }
+    
+    /**
+     * Get remaining requests for a key
+     */
+    public RateLimitInfo getRateLimitInfo(String key, int maxRequests, int windowSeconds) {
+        String redisKey = "rate_limit:" + key;
+        Long windowStart = System.currentTimeMillis() - (windowSeconds * 1000L);
+        
+        redisTemplate.opsForZSet().removeRangeByScore(redisKey, 0, windowStart);
+        Long count = redisTemplate.opsForZSet().zCard(redisKey);
+        
+        int remaining = maxRequests - (count != null ? count.intValue() : 0);
+        long resetTime = System.currentTimeMillis() + (windowSeconds * 1000L);
+        
+        return new RateLimitInfo(maxRequests, remaining, resetTime);
+    }
+    
+    @Data
+    @AllArgsConstructor
+    public static class RateLimitInfo {
+        private int limit;
+        private int remaining;
+        private long resetTime;
+    }
+}
+```
+
+##### 2. Rate Limiting Filter
+
+```java
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+@Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
     
-    private final Map<String, RateLimiter> limiters = new ConcurrentHashMap<>();
+    @Autowired
+    private RedisRateLimiter rateLimiter;
+    
+    @Value("${rate-limit.default.max-requests:100}")
+    private int defaultMaxRequests;
+    
+    @Value("${rate-limit.default.window-seconds:60}")
+    private int defaultWindowSeconds;
+    
+    // Different limits for different endpoints
+    private final Map<String, RateLimitConfig> endpointLimits = Map.of(
+        "/api/auth/login", new RateLimitConfig(5, 300),  // 5 per 5 minutes
+        "/api/public/**", new RateLimitConfig(1000, 60),  // 1000 per minute
+        "/api/admin/**", new RateLimitConfig(500, 60)     // 500 per minute
+    );
     
     @Override
-    protected void doFilterInternal(HttpServletRequest request, 
-                                    HttpServletResponse response, 
-                                    FilterChain filterChain) 
-            throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
         
+        String path = request.getRequestURI();
         String clientId = getClientId(request);
-        RateLimiter limiter = limiters.computeIfAbsent(clientId, 
-            k -> RateLimiter.create(10.0)); // 10 requests per second
         
-        if (!limiter.tryAcquire()) {
+        // Get rate limit config for endpoint
+        RateLimitConfig config = getRateLimitConfig(path);
+        
+        // Check rate limit
+        boolean allowed = rateLimiter.allowRequest(
+            clientId + ":" + path,
+            config.maxRequests,
+            config.windowSeconds
+        );
+        
+        // Get rate limit info
+        RedisRateLimiter.RateLimitInfo info = rateLimiter.getRateLimitInfo(
+            clientId + ":" + path,
+            config.maxRequests,
+            config.windowSeconds
+        );
+        
+        // Add rate limit headers
+        response.setHeader("X-RateLimit-Limit", String.valueOf(info.getLimit()));
+        response.setHeader("X-RateLimit-Remaining", String.valueOf(info.getRemaining()));
+        response.setHeader("X-RateLimit-Reset", String.valueOf(info.getResetTime() / 1000));
+        
+        if (!allowed) {
+            // Rate limit exceeded
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-            response.getWriter().write("Too many requests");
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setHeader("Retry-After", 
+                String.valueOf(config.windowSeconds));
+            
+            String errorResponse = String.format(
+                "{\"error\": \"Rate limit exceeded\", " +
+                "\"limit\": %d, " +
+                "\"retryAfter\": %d}",
+                config.maxRequests,
+                config.windowSeconds
+            );
+            
+            response.getWriter().write(errorResponse);
+            log.warn("Rate limit exceeded for client: {} on path: {}", clientId, path);
             return;
         }
         
@@ -1154,10 +1998,305 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
     
     private String getClientId(HttpServletRequest request) {
-        return request.getRemoteAddr();
+        // Try to get user ID from security context
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && 
+            !"anonymousUser".equals(auth.getPrincipal())) {
+            return "user:" + auth.getName();
+        }
+        
+        // Fallback to IP address
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty()) {
+            ip = request.getRemoteAddr();
+        }
+        return "ip:" + ip;
+    }
+    
+    private RateLimitConfig getRateLimitConfig(String path) {
+        return endpointLimits.entrySet().stream()
+            .filter(entry -> pathMatches(path, entry.getKey()))
+            .map(Map.Entry::getValue)
+            .findFirst()
+            .orElse(new RateLimitConfig(defaultMaxRequests, defaultWindowSeconds));
+    }
+    
+    private boolean pathMatches(String path, String pattern) {
+        return pattern.equals(path) || 
+               (pattern.endsWith("**") && 
+                path.startsWith(pattern.substring(0, pattern.length() - 2)));
+    }
+    
+    @Data
+    @AllArgsConstructor
+    private static class RateLimitConfig {
+        private int maxRequests;
+        private int windowSeconds;
     }
 }
 ```
+
+##### 3. Annotation-Based Rate Limiting
+
+```java
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface RateLimited {
+    int maxRequests() default 100;
+    int windowSeconds() default 60;
+    String keyPrefix() default "";
+}
+
+@Aspect
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class RateLimitAspect {
+    
+    private final RedisRateLimiter rateLimiter;
+    
+    @Around("@annotation(rateLimited)")
+    public Object checkRateLimit(ProceedingJoinPoint joinPoint, 
+                                  RateLimited rateLimited) throws Throwable {
+        
+        // Get client identifier
+        String clientId = getCurrentUserId();
+        String methodName = joinPoint.getSignature().getName();
+        String key = rateLimited.keyPrefix().isEmpty() 
+            ? clientId + ":" + methodName
+            : clientId + ":" + rateLimited.keyPrefix();
+        
+        // Check rate limit
+        boolean allowed = rateLimiter.allowRequest(
+            key,
+            rateLimited.maxRequests(),
+            rateLimited.windowSeconds()
+        );
+        
+        if (!allowed) {
+            throw new RateLimitExceededException(
+                rateLimited.maxRequests(),
+                System.currentTimeMillis() + (rateLimited.windowSeconds() * 1000L),
+                rateLimited.windowSeconds()
+            );
+        }
+        
+        return joinPoint.proceed();
+    }
+    
+    private String getCurrentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : "anonymous";
+    }
+}
+
+// Usage
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    
+    @GetMapping("/{id}")
+    @RateLimited(maxRequests = 100, windowSeconds = 60)
+    public User getUser(@PathVariable Long id) {
+        return userService.findById(id);
+    }
+    
+    @PostMapping
+    @RateLimited(maxRequests = 10, windowSeconds = 60, keyPrefix = "create_user")
+    public User createUser(@RequestBody UserDTO dto) {
+        return userService.create(dto);
+    }
+}
+```
+
+##### 4. Bucket4j Integration (Advanced)
+
+```xml
+<dependency>
+    <groupId>com.github.vladimir-bukhtoyarov</groupId>
+    <artifactId>bucket4j-core</artifactId>
+    <version>8.5.0</version>
+</dependency>
+<dependency>
+    <groupId>com.github.vladimir-bukhtoyarov</groupId>
+    <artifactId>bucket4j-redis</artifactId>
+    <version>8.5.0</version>
+</dependency>
+```
+
+```java
+@Configuration
+public class Bucket4jConfiguration {
+    
+    @Bean
+    public ProxyManager<String> proxyManager(RedisConnectionFactory connectionFactory) {
+        RedissonClient redisson = // ... configure Redisson
+        return new RedissonProxyManager<>(redisson);
+    }
+}
+
+@Service
+@RequiredArgsConstructor
+public class Bucket4jRateLimiter {
+    
+    private final ProxyManager<String> proxyManager;
+    
+    public boolean allowRequest(String key, long capacity, long refillTokens, Duration refillPeriod) {
+        BucketConfiguration config = BucketConfiguration.builder()
+            .addLimit(Bandwidth.builder()
+                .capacity(capacity)
+                .refillGreedy(refillTokens, refillPeriod)
+                .build())
+            .build();
+        
+        Bucket bucket = proxyManager.builder().build(key, config);
+        return bucket.tryConsume(1);
+    }
+    
+    public ConsumptionProbe probe(String key) {
+        Bucket bucket = proxyManager.getProxy(key);
+        return bucket.tryConsumeAndReturnRemaining(1);
+    }
+}
+```
+
+##### 5. Monitoring and Metrics
+
+```java
+@Configuration
+public class RateLimitMetricsConfig {
+    
+    @Bean
+    public MeterBinder rateLimitMetrics(RedisRateLimiter rateLimiter) {
+        return (registry) -> {
+            // Track rate limit hits
+            Counter.builder("rate_limit.hits")
+                .description("Number of requests that hit rate limit")
+                .register(registry);
+            
+            // Track rate limit misses
+            Counter.builder("rate_limit.misses")
+                .description("Number of requests allowed")
+                .register(registry);
+            
+            // Track by endpoint
+            Tags.of("endpoint", "/api/users");
+        };
+    }
+}
+```
+
+##### 6. Configuration
+
+```yaml
+# application.yml
+rate-limit:
+  default:
+    max-requests: 100
+    window-seconds: 60
+  
+  endpoints:
+    /api/auth/login:
+      max-requests: 5
+      window-seconds: 300  # 5 per 5 minutes
+    
+    /api/public/**:
+      max-requests: 1000
+      window-seconds: 60
+    
+    /api/admin/**:
+      max-requests: 500
+      window-seconds: 60
+
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    timeout: 2000ms
+```
+
+##### 7. Testing Rate Limiting
+
+```java
+@SpringBootTest
+@AutoConfigureMockMvc
+class RateLimitFilterTest {
+    
+    @Autowired
+    private MockMvc mockMvc;
+    
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+    
+    @BeforeEach
+    void setup() {
+        // Clear Redis before each test
+        redisTemplate.getConnectionFactory()
+            .getConnection()
+            .flushAll();
+    }
+    
+    @Test
+    void shouldAllowRequestsWithinLimit() throws Exception {
+        // Make 5 requests (within limit)
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(get("/api/users/1"))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-RateLimit-Limit"))
+                .andExpect(header().exists("X-RateLimit-Remaining"));
+        }
+    }
+    
+    @Test
+    void shouldBlockRequestsExceedingLimit() throws Exception {
+        // Make 101 requests (exceed limit of 100)
+        for (int i = 0; i < 100; i++) {
+            mockMvc.perform(get("/api/users/1"))
+                .andExpect(status().isOk());
+        }
+        
+        // 101st request should be blocked
+        mockMvc.perform(get("/api/users/1"))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(header().exists("Retry-After"))
+            .andExpect(jsonPath("$.error").value("Rate limit exceeded"));
+    }
+    
+    @Test
+    void shouldResetAfterWindow() throws Exception {
+        // Make 100 requests
+        for (int i = 0; i < 100; i++) {
+            mockMvc.perform(get("/api/users/1"))
+                .andExpect(status().isOk());
+        }
+        
+        // Wait for window to reset
+        Thread.sleep(61000); // 61 seconds
+        
+        // Should allow requests again
+        mockMvc.perform(get("/api/users/1"))
+            .andExpect(status().isOk());
+    }
+}
+```
+
+#### Best Practices
+
+1. **Different limits for different endpoints**: Login endpoints should have stricter limits
+2. **Graceful degradation**: If Redis is down, fail open (allow requests)
+3. **Return proper headers**: `X-RateLimit-*` headers help clients
+4. **User-based vs IP-based**: Authenticated users get higher limits
+5. **Monitoring**: Track rate limit metrics
+6. **Clear error messages**: Tell users when they can retry
+7. **Whitelist trusted IPs**: Admin IPs, monitoring services, etc.
+
+#### Interview Tips
+
+**Q: How do you implement rate limiting in a distributed system?**
+> "I use Redis with a sliding window algorithm. Redis ensures all instances see the same counter. I implement Token Bucket for smooth rate limiting, return standard headers (X-RateLimit-*), and fail open if Redis is unavailable to prevent cascading failures. Different endpoints get different limits - login is 5/5min, public API is 1000/min."
+
+**Q: What's the difference between Token Bucket and Fixed Window?**
+> "Token Bucket allows burst traffic and refills at a steady rate, providing smoother rate limiting. Fixed Window counts requests in fixed intervals but can allow up to 2x the limit at window boundaries (edge case). I prefer Token Bucket with Bucket4j for production systems."
 
 ---
 
