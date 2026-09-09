@@ -1917,6 +1917,19 @@ All store unique elements. `HashSet` has no ordering and O(1) ops (backed by Has
 <summary><b>Q13. How does HashSet work internally?</b></summary>
 
 It's backed by a `HashMap`. Each element you add becomes a **key** in that map, mapped to a shared dummy value (`PRESENT`). So `set.add(x)` is `map.put(x, PRESENT)`, and uniqueness is enforced by HashMap's key uniqueness — using `hashCode()` for the bucket and `equals()` for collision checks.
+
+`PRESENT` is a single shared dummy object reused as the value for all entries, since a `Set` only cares about keys, not values.
+
+```java
+private static final Object PRESENT = new Object();
+
+public boolean add(E e) {
+    return map.put(e, PRESENT) == null;
+}
+```
+
+If `map.put()` returns `null`, the element was absent and is added successfully; otherwise, the element already exists and `add()` returns `false`.
+
 </details>
 
 <details>
@@ -1960,7 +1973,29 @@ Since Java 8, when a single bucket's chain length exceeds `TREEIFY_THRESHOLD = 8
 <details>
 <summary><b>Q20. What happens on a hash collision?</b></summary>
 
-Two keys map to the same bucket. The entry is appended to that bucket's chain (or tree). On lookup, HashMap compares the cached `hash` of each node, and where hashes match, calls `equals()` to find the exact key. So collisions don't lose data — they just add traversal cost.
+When two different keys produce the same bucket index, a **hash collision** occurs. `HashMap` does not overwrite the existing entry; instead, it stores multiple entries in the same bucket. In **Java 8+**, collisions are handled using a **linked list**, and new entries are appended at the **tail (end)** of the list, preserving insertion order within that bucket. In **Java 7 and earlier**, new entries were inserted at the **head (beginning)** of the list.
+
+This behavior was changed in Java 8 because head insertion during **resize/rehashing** could reverse the order of nodes and, under concurrent modification, potentially create an **infinite loop**. Appending at the tail preserves the bucket order and avoids these issues.
+In Java 7, if two threads resized the same bucket concurrently, node pointers could become corrupted and form a cycle such as A → B → A. Since HashMap.get() traverses nodes until it reaches null, it would loop forever on a cyclic list, causing 100% CPU utilization. Java 8 fixed this by appending nodes at the tail and redesigning the resize algorithm.
+
+During lookup, `HashMap` computes the bucket index and traverses the linked list (or tree) in that bucket. For each node, it first compares the cached `hash` value, and if the hashes match, it calls `equals()` to check whether the keys are actually equal. If a matching key is found, its value is returned; otherwise, traversal continues.
+
+If the number of nodes in a bucket exceeds **8** and the table capacity is at least **64**, the linked list is converted into a **Red-Black Tree**, reducing lookup time from **O(n)** to **O(log n)**.
+
+Example bucket after collisions in Java 8+:
+
+```text
+Before inserting D:
+
+A → B → C → null
+
+After inserting D:
+
+A → B → C → D → null
+```
+
+Collisions never lose data; they only increase the cost of searching within that bucket.
+
 </details>
 
 <details>
@@ -1988,9 +2023,188 @@ LinkedHashMap is a HashMap that also maintains a doubly-linked list across entri
 </details>
 
 <details>
-<summary><b>Q25. How do you build an LRU cache in Java?</b></summary>
+<summary><b>Q21. How do you build an LRU Cache in Java?</b></summary>
 
-Extend `LinkedHashMap` with `accessOrder = true` and override `removeEldestEntry` to evict when size exceeds capacity. Each `get`/`put` moves the entry to the end; the eldest (least-recently-used) is dropped automatically. For thread-safe LRU, guard it or use a library like Caffeine.
+An **LRU (Least Recently Used) Cache** evicts the entry that has not been accessed for the longest time when the cache reaches its maximum capacity.
+There are two common approaches:
+1. **Extend `LinkedHashMap`** – Simple, elegant, and suitable for single-threaded use cases.
+2. **Use Caffeine** – Production-ready, highly optimized, and thread-safe.
+
+Note: In interviews, an implementation using HashMap and LinkedList is also expected which requires full code implementation without Collections framework. It's not covered here.
+
+---
+
+### 1. Using `LinkedHashMap`
+
+`LinkedHashMap` internally maintains a **HashMap + Doubly Linked List**.
+
+By passing `accessOrder=true` to the constructor, every `get()` and `put()` operation moves the accessed entry to the **tail** of the linked list, making it the **Most Recently Used (MRU)** entry.
+
+The **Least Recently Used (LRU)** entry is always at the **head** and can be automatically removed by overriding `removeEldestEntry()`.
+
+### Internal Ordering
+
+```text
+Head (LRU)                            Tail (MRU)
+
+1=A  ⇄  2=B  ⇄  3=C
+```
+
+After:
+
+```java
+cache.get(1);
+```
+
+```text
+Head (LRU)                            Tail (MRU)
+
+2=B  ⇄  3=C  ⇄  1=A
+```
+
+Inserting another element removes the eldest entry automatically.
+
+<details>
+<summary><b>LinkedHashMap Implementation</b></summary>
+
+```java
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class LRUCache<K, V> extends LinkedHashMap<K, V> {
+
+    private final int capacity;
+
+    public LRUCache(int capacity) {
+        super(capacity, 0.75f, true);
+        this.capacity = capacity;
+    }
+
+    @Override
+    protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+        return size() > capacity;
+    }
+
+    public static void main(String[] args) {
+        LRUCache<Integer, String> cache = new LRUCache<>(3);
+
+        cache.put(1, "A");
+        cache.put(2, "B");
+        cache.put(3, "C");
+
+        cache.get(1);
+
+        cache.put(4, "D");
+
+        System.out.println(cache);
+    }
+}
+```
+
+Output:
+
+```text
+{3=C, 1=A, 4=D}
+```
+
+</details>
+
+---
+
+### 2. Using 'Caffeine'
+For production systems, most teams prefer **Caffeine** because it provides:
+- Thread safety
+- Near-optimal performance
+- Automatic eviction
+- Expiration policies
+- Statistics
+- Asynchronous loading
+- Spring Boot integration
+
+Unlike `LinkedHashMap`, Caffeine uses advanced algorithms (W-TinyLFU) to achieve better cache hit rates under heavy workloads.
+
+<details>
+<summary><b>Caffeine Implementation</b></summary>
+
+### Maven Dependency
+
+```xml
+<dependency>
+    <groupId>com.github.ben-manes.caffeine</groupId>
+    <artifactId>caffeine</artifactId>
+    <version>3.2.2</version>
+</dependency>
+```
+
+### Simple Cache
+
+```java
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
+public class Main {
+    public static void main(String[] args) {
+        Cache<Integer, String> cache =
+                Caffeine.newBuilder()
+                        .maximumSize(3)
+                        .build();
+
+        cache.put(1, "A");
+        cache.put(2, "B");
+        cache.put(3, "C");
+
+        cache.getIfPresent(1);
+
+        cache.put(4, "D");
+
+        System.out.println(cache.asMap());
+    }
+}
+```
+
+### Loading Cache
+
+```java
+import com.github.benmanes.caffeine.cache.LoadingCache;
+
+LoadingCache<Integer, String> cache =
+        Caffeine.newBuilder()
+                .maximumSize(100)
+                .build(key -> "Value-" + key);
+
+System.out.println(cache.get(10));
+```
+
+### Expiration Policy
+
+```java
+Cache<Integer, String> cache =
+        Caffeine.newBuilder()
+                .maximumSize(100)
+                .expireAfterWrite(10, TimeUnit.MINUTES)
+                .build();
+```
+
+</details>
+
+---
+
+## Complexity Analysis
+
+| Operation | LinkedHashMap | Caffeine |
+|-----------|---------------|----------|
+| `get()` | O(1) | O(1) |
+| `put()` | O(1) | O(1) |
+| Eviction | O(1) | O(1) |
+| Thread Safe | ❌ No | ✅ Yes |
+
+---
+
+### Interview Recommendation
+
+- Use **LinkedHashMap** when asked to implement an LRU cache in an interview.
+- Use **Caffeine** in production applications because it provides better concurrency, eviction policies, and cache hit rates.
+
 </details>
 
 <details>

@@ -2600,6 +2600,303 @@ You wrapped the behavior in an **anonymous class** implementing a single-method 
 ### Part II — Streams
 
 <details>
+<summary><b>[Important] Why are Java Streams efficient?</b></summary>
+Java Streams are efficient because they use **lazy evaluation**, **one-by-one processing**, **pipeline fusion**, and **short-circuiting**, which reduce memory usage and unnecessary computations.
+
+### 1. Lazy Evaluation
+Streams are **lazy**. Intermediate operations (`filter`, `map`, `sorted`) do not execute immediately; they only build a pipeline.
+
+```java
+Stream<String> s = names.stream()
+                        .filter(n -> n.length() > 3)
+                        .map(String::toUpperCase);
+```
+
+No processing happens until a terminal operation is called.
+
+---
+
+### 2. Execution Starts Only with a Terminal Operation
+A terminal operation (`collect`, `count`, `findFirst`, `average`, etc.) triggers execution.
+
+```java
+List<String> result = s.collect(Collectors.toList());
+```
+
+Think of it as **switching ON the assembly line**.
+
+---
+
+### 3. Streams Process Elements One-by-One (Vertical Processing)
+
+```java
+names.stream()
+     .filter(n -> n.length() > 3)
+     .map(String::toUpperCase)
+     .collect(Collectors.toList());
+```
+
+Input:
+
+```text
+[Alice, Bob, Charlie, Dave]
+```
+
+❌ Horizontal Processing (Not Streams)
+
+```text
+Filter everyone
+↓
+[Alice, Charlie, Dave]
+
+Map everyone
+↓
+[ALICE, CHARLIE, DAVE]
+```
+
+✅ Vertical Processing (Actual Streams)
+
+```text
+Alice
+  ↓ Filter ✓
+  ↓ Map
+  ↓ Collect
+
+Bob
+  ↓ Filter ✗
+  ↓ Discard
+
+Charlie
+  ↓ Filter ✓
+  ↓ Map
+  ↓ Collect
+```
+> Collections process data **horizontally (stage-by-stage)**, while Streams process data **vertically (one item through all stages at a time)**.
+
+---
+
+### 4. No Intermediate Collections
+Streams avoid creating temporary collections for stateless operations.
+
+❌ Traditional
+
+```java
+List<String> filtered = ...;
+List<String> upper = ...;
+```
+
+✅ Streams
+
+```java
+List<String> result = names.stream()
+                           .filter(n -> n.length() > 3)
+                           .map(String::toUpperCase)
+                           .toList();
+```
+
+Only the final result list is created.
+
+---
+
+### 5. Short-Circuiting Saves Work
+Operations like `findFirst()`, `anyMatch()`, and `limit()` stop processing as soon as enough data is found.
+
+```java
+String first = names.stream()
+                    .filter(n -> n.length() > 3)
+                    .findFirst()
+                    .orElse("");
+```
+
+```text
+Alice ✓
+↓
+findFirst()
+↓
+STOP
+```
+
+Bob, Charlie and Dave are never processed.
+
+---
+
+### 6. Infinite Streams Are Possible
+
+```java
+List<Double> nums = Stream.generate(Math::random)
+                          .filter(n -> n > 0.5)
+                          .limit(5)
+                          .toList();
+```
+
+```text
+0.12 ✗
+0.81 ✓
+0.77 ✓
+0.65 ✓
+0.91 ✓
+0.88 ✓
+
+Got 5 values
+↓
+STOP
+```
+
+Without laziness, infinite streams would cause memory issues.
+
+---
+
+### 7. Put Cheap Filters Before Expensive Operations
+
+❌ Bad
+
+```java
+users.stream()
+     .map(this::fetchUserFromDB)
+     .filter(User::isAdmin)
+     .findFirst();
+```
+
+May fetch hundreds of users.
+
+✅ Better
+
+```java
+userIds.stream()
+       .filter(id -> id.startsWith("admin"))
+       .map(this::fetchUserFromDB)
+       .findFirst();
+```
+
+Filter first, then do expensive work.
+
+---
+
+### 8. Pipeline Fusion (Single Traversal)
+
+```java
+stream()
+.filter(...)
+.map(...)
+.collect(...)
+```
+
+Internally behaves like:
+
+```text
+Item
+ ↓
+Filter
+ ↓
+Map
+ ↓
+Collect
+```
+
+Instead of multiple passes over the collection.
+
+---
+
+### 9. Not All Stream Operations Are Equally Efficient
+
+Examples:
+
+```java
+sorted()
+distinct()
+groupingBy()
+```
+
+These may require buffering elements internally.
+
+---
+
+### 10. Stateless Operations Use O(1) Memory
+
+Examples:
+
+```java
+filter()
+map()
+peek()
+```
+
+Only the current element is needed.
+
+```text
+Memory: O(1)
+```
+
+---
+
+### 11. Stateful Operations May Use O(N) Memory
+
+Examples:
+
+```java
+sorted()
+distinct()
+groupingBy()
+```
+
+```java
+stream()
+.sorted()
+.collect(toList());
+```
+
+Sorting requires seeing all elements first.
+
+```text
+Memory: O(N)
+```
+
+---
+
+### 12. For Small Collections, Loops Can Be Faster
+
+```java
+int sum = 0;
+for (int n : nums) {
+    sum += n;
+}
+```
+
+may outperform
+
+```java
+int sum = nums.stream()
+              .mapToInt(Integer::intValue)
+              .sum();
+```
+
+because streams have lambda and pipeline overhead.
+
+---
+
+## Quick Revision Table
+
+| Feature | Benefit |
+|---------|---------|
+| Lazy Evaluation | Work only when needed |
+| Terminal Operation | Starts execution |
+| One-by-One Processing | No unnecessary storage |
+| No Intermediate Collections | Lower memory & GC |
+| Short-Circuiting | Stops early |
+| Infinite Streams | Safe processing of endless data |
+| Cheap Filter First | Avoid expensive computations |
+| Pipeline Fusion | Single traversal |
+| Stateless Ops | O(1) memory |
+| Stateful Ops | May require O(N) memory |
+| Small Data | Loops may be faster |
+
+### One-Line Interview Answer
+
+> Java Streams are efficient because they use lazy evaluation, process elements one-by-one through a fused pipeline, avoid intermediate collections, support short-circuiting (`findFirst`, `anyMatch`, `limit`), and can safely handle infinite data sources. However, stateful operations like `sorted()` and `distinct()` may require additional memory, and simple loops can be faster for very small datasets.
+
+</details>
+
+<details>
 <summary><b>Q11. What is a Stream? Is it a data structure?</b></summary>
 
 A Stream is **not** a data structure and **not** a collection — it stores no elements and holds no copy of the source. It's a **pipeline of operations** over a flow of elements. Think of a conveyor belt: data from a collection flows through stations (filter, map, sort), and a terminal operation collects the result. It reads from the source but never modifies it, and it's consumed once.
