@@ -43,7 +43,7 @@
     - [10.7 Tuning Flags Cheat Sheet](#107-tuning-flags-cheat-sheet)
 11. [JVM Profiling — Finding the Bottleneck](#11-jvm-profiling--finding-the-bottleneck)
 12. [Thread Dump Analysis — Debugging Hangs & Deadlocks](#12-thread-dump-analysis--debugging-hangs--deadlocks)
-13. [❓ FAANG Interview Questions (70+)](#13--faang-interview-questions-70)
+13. [❓ FAANG Interview Questions (75+)](#13--faang-interview-questions-75)
 14. [⚡ Quick-Revision Cheat Sheet](#14--quick-revision-cheat-sheet)
 
 ---
@@ -57,6 +57,7 @@ Before the details, lock in the big idea.
 That single layer of indirection is the magic behind **"Write Once, Run Anywhere."** You ship one `.class` file, and the *JVM* (a different one for Windows, Mac, Linux, ARM) deals with the messy hardware differences.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     A["Your code<br/>Hello.java"] -->|javac| B["Bytecode<br/>Hello.class<br/>(universal)"]
     B --> C1["JVM for Windows"] --> D1["Windows machine code"]
@@ -75,6 +76,7 @@ flowchart LR
 These three are nested like Russian dolls, and mixing them up is the single most common beginner confusion. Here's the containment relationship:
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     subgraph JDK["☕ JDK — Java Development Kit (build + run)"]
         direction TB
@@ -117,6 +119,7 @@ flowchart TB
 When people say "JVM" they could mean one of three very different things. Interviewers love this distinction.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     SPEC["📄 1. Specification<br/>A document.<br/>'What a JVM must do.'<br/>Ensures interoperability."]
     IMPL["💿 2. Implementation<br/>A real program.<br/>HotSpot, OpenJ9, GraalVM, Azul Zing.<br/>Meets the spec."]
@@ -144,6 +147,7 @@ flowchart LR
 Here is the full journey of a Java program, from text you type to instructions your CPU runs.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     A["1 You write source<br/>Hello.java<br/>(classes, methods, variables)"]
     B["2 Compile with javac<br/>$ javac Hello.java"]
@@ -212,7 +216,12 @@ Notice the bytecode (`getstatic`, `ldc`, `invokevirtual`) — these are the "ima
 
 Everything inside a running JVM falls into **three subsystems**. Keep this diagram in your head; the rest of the guide just zooms into each box.
 
+![The complete JVM architecture: the ClassLoader Subsystem, the Runtime Data Area, and the Execution Engine with the Native Method Interface](images/jvm-architecture-overview.png)
+
+*A `.class` file enters the **ClassLoader Subsystem** (Loading → Linking → Initialization), which populates the **Runtime Data Area** (Method Area, Heap, per-thread Stacks + PC Registers, and the Native Method Stack). The **Execution Engine** (Interpreter, JIT Compiler, Garbage Collector) then runs that code, reaching out to native libraries through the **Java Native Interface (JNI)**. The schematic below is the same picture, annotated with what each box holds.*
+
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     CLASS["📁 .class files (bytecode)"]
 
@@ -274,6 +283,7 @@ The source can be the local filesystem, a network URL, a database, or an encrypt
 Java ships with three default loaders, arranged in a **parent-child hierarchy**. Each has a fixed, predefined location it loads from.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     BOOT["🥾 Bootstrap ClassLoader<br/>(a.k.a. Primordial)<br/>Written in native C/C++<br/>Loads: JRE/lib/rt.jar — core JDK<br/>(java.lang.*, java.util.*, ...)<br/>Parent of all; has NO parent"]
     EXT["🧩 Extension / Platform ClassLoader<br/>Written in Java (ExtClassLoader)<br/>Loads: JRE/lib/ext or java.ext.dirs"]
@@ -333,6 +343,7 @@ ClassLoaders operate on three rules. Understanding **delegation** is the single 
 When asked to load a class, a loader **does not load it itself first** — it **delegates upward to its parent**, all the way to Bootstrap. Only if every ancestor *fails* to find the class does the original loader try to load it. This is the **parent-delegation model**.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 sequenceDiagram
     participant App as Application Loader
     participant Ext as Extension Loader
@@ -405,6 +416,7 @@ public class ClassLoaderTest {
 Getting a class "ready to use" is not one step but three, and **Linking** itself has three sub-steps.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     subgraph L1["1️⃣ LOADING"]
         A["Read .class bytes into Method Area.<br/>Create one java.lang.Class object on the Heap<br/>to represent this class."]
@@ -434,7 +446,7 @@ flowchart TB
 - **Prepare:** memory is allocated for **static** variables and they're set to **default values** (`0`, `0.0`, `false`, `null`) — *not* their assigned values yet.
 - **Resolve:** symbolic references in the constant pool (e.g. "the class named `String`") are replaced with **direct references** (actual pointers). Often done lazily, on first use.
 
-**3. Initialization.** Static variables get their **real, programmer-assigned values**, and **`static {}` blocks run**, top to bottom. This is the moment a class truly comes alive.
+**3. Initialization.** Static variables get their **real, programmer-assigned values**, and **`static {}` blocks run**, top to bottom. This is the moment a class truly comes alive. Under the hood the compiler gathers every static initializer and static-field assignment, in source order, into a single synthetic method called **`<clinit>`** ("class init"); *running `<clinit>` is initialization*. A class's **superclass is always initialized before the class itself**, so `<clinit>` of a parent runs before its child's.
 
 <details>
 <summary>📄 <strong>Code: Prepare vs Initialize — the default-then-real two-step</strong></summary>
@@ -454,6 +466,63 @@ public class Counter {
    Linking→Resolve→ symbolic refs resolved
    Initialization → count set to 42, static block executes
 */
+```
+</details>
+
+#### When does initialization actually happen?
+
+Loading and linking can occur early, but **initialization is lazy** — it fires only on the **first *active* use** of a class, never before. This distinction (from the language spec) is a favourite interview probe. Active uses that *trigger* `<clinit>` include: creating an instance (`new`), invoking a static method, reading or writing a **non-constant** static field, and `Class.forName("X")`. Uses that *do not* trigger it — so-called **passive** uses — include reading a `static final` **compile-time constant** (the compiler already inlined its value), referencing a class only through an array type (`Foo[]`), or accessing a static member declared in a *parent* through a subclass.
+
+<details>
+<summary>📄 <strong>Code: which reference triggers initialization?</strong></summary>
+
+```java
+class Config {
+    static final int MAX = 100;              // compile-time constant → INLINED by javac
+    static int counter = compute();          // non-constant static → needs initialization
+    static { System.out.println("Config <clinit> ran"); }
+    static int compute() { return 42; }
+}
+
+public class TriggerDemo {
+    public static void main(String[] args) {
+        System.out.println(Config.MAX);      // passive use → NO "<clinit> ran" printed
+        System.out.println(Config.counter);  // active use  → NOW "<clinit> ran" prints first
+    }
+}
+/* Output:
+   100
+   Config <clinit> ran
+   42
+   Reading MAX never loads Config's initializer because the constant was baked
+   into TriggerDemo at compile time; reading `counter` forces initialization.
+*/
+```
+</details>
+
+#### Initialization is thread-safe — and free to exploit
+
+The JVM guarantees that `<clinit>` runs **exactly once**, even if many threads race to use the class at the same time: the first thread acquires an initialization lock on that class, runs `<clinit>`, and every other thread **blocks** until it completes. You get this once-only, happens-before guarantee *for free* from the JVM — which is exactly what the classic **initialization-on-demand holder** idiom leans on for lazy, thread-safe singletons with no explicit synchronization.
+
+> ⚠️ **When a static initializer throws.** If `<clinit>` fails with an exception, the JVM wraps it in an **`ExceptionInInitializerError`** and marks the class *erroneous*. Any later attempt to use that class throws **`NoClassDefFoundError`** — a confusing symptom whose real root cause is a failed initializer, not a missing `.class`. Always read the "Caused by" chain.
+
+<details>
+<summary>📄 <strong>Code: thread-safe lazy singleton via the holder idiom</strong></summary>
+
+```java
+public class Registry {
+    private Registry() { /* expensive setup */ }
+
+    // Holder isn't loaded until getInstance() is first called.
+    // The JVM's class-init lock makes this lazy AND thread-safe — no synchronized needed.
+    private static class Holder {
+        static final Registry INSTANCE = new Registry();
+    }
+
+    public static Registry getInstance() {
+        return Holder.INSTANCE;   // triggers Holder's <clinit> exactly once
+    }
+}
 ```
 </details>
 
@@ -549,6 +618,7 @@ public class ClassLoadingExample {
 Two errors that *sound* identical but mean very different things. Knowing the difference instantly signals seniority.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     subgraph CNFE["ClassNotFoundException — an EXCEPTION (java.lang.Exception, checked)"]
         C1["Thrown at RUNTIME when you explicitly load a class<br/>via Class.forName() / loadClass() / findSystemClass()"]
@@ -611,6 +681,7 @@ public class B {
 Once classes are loaded, the JVM needs memory to hold class metadata, objects, and the per-thread bookkeeping for executing code. The spec defines **five** runtime data areas.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     subgraph SHARED["🌐 Shared across ALL threads — created at JVM startup"]
         direction LR
@@ -649,6 +720,81 @@ flowchart TB
 > - The **Method Area** is the building's *blueprints-and-rules room* — the definition of every department (class), the company-wide notice board (static vars), shared.
 > - Each employee (**thread**) has their own *personal desk* (**Stack**) with a to-do list of nested tasks (frames) and a *finger on the current line* of their checklist (**PC register**). No one else touches your desk.
 
+Two precise details worth carrying into an interview: the JVM spec technically treats the **Method Area as a logical part of the heap**, but real implementations keep it separate (in Java 8+ it's **Metaspace in native memory**, outside the object heap). And a thread's **PC register value is undefined while it executes a *native* method** — the PC only tracks *bytecode* addresses, and native code isn't bytecode.
+
+<details>
+<summary>📄 <strong>Code: a memory map — where does every piece of a program live?</strong></summary>
+
+```java
+public class Order {
+    static int totalOrders = 0;        // static field        → METHOD AREA
+    int id;                            // instance field      → inside the object on the HEAP
+    int[] items;                       // reference field     → object on HEAP; the array too
+
+    Order(int id, int size) {
+        this.id = id;
+        this.items = new int[size];    // the int[] object is allocated on the HEAP
+        totalOrders++;
+    }
+
+    public static void main(String[] args) {
+        int count = 2;                 // local primitive     → main's frame on the JVM STACK
+        Order o = new Order(count, 3); // 'o' (a reference)   → JVM STACK
+    }                                  // the Order object    → HEAP
+}
+```
+
+| Piece of the program | Where it lives |
+|----------------------|----------------|
+| `Order.class` metadata, method bytecode, runtime constant pool | **Method Area** |
+| `static int totalOrders` | **Method Area** (static variables) |
+| The `Order` object + its `id` and `items` instance fields | **Heap** |
+| The `int[]` array created by `new int[size]` | **Heap** (arrays are objects) |
+| `args`, `count`, `o`, and `this` | Current **frame** on the **JVM Stack** (Local Variables) |
+| Address of the bytecode instruction `main` is currently on | That thread's **PC Register** |
+
+One program, and every one of the five areas is in play — this single picture is worth being able to reproduce on a whiteboard.
+</details>
+
+### Inside a Stack Frame — Local Variables, Operand Stack, Frame Data
+
+Every method call pushes exactly one **stack frame** onto the calling thread's JVM Stack, and destroys it when the method returns. A frame is not a single blob — it has three fixed sub-parts, and the size of each is decided at **compile time** (which is why a `StackOverflowError`, not a resize, is what you get from runaway recursion).
+
+```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
+flowchart LR
+    subgraph FRAME["Stack Frame — one per method call"]
+        direction LR
+        LV["Local Variables Array<br/>method parameters + declared locals<br/>(length fixed at compile time)"]
+        OS["Operand Stack<br/>LIFO scratch space for<br/>intermediate calculations<br/>(max depth fixed at compile time)"]
+        FD["Frame Data<br/>reference into the runtime constant pool<br/>+ exception table (catch-block info)"]
+    end
+    style LV fill:#cfe8ff,stroke:#2a7ab0
+    style OS fill:#e9fbe9,stroke:#2a8a2a
+    style FD fill:#ffe9b3,stroke:#d49a00
+```
+
+- **Local Variables** — an indexed array holding the method's parameters and its locally declared variables. For an instance method, `this` occupies slot 0.
+- **Operand Stack** — the method's working bench. Bytecode instructions push operands onto it, an arithmetic or logic operation pops them, and the result is pushed back. This is why the JVM is a *stack machine* rather than a register machine.
+- **Frame Data** — the bookkeeping: a pointer into the runtime constant pool (used to resolve the method's symbolic references) and the method's exception table (which `catch` handler covers which range of bytecode).
+
+<details>
+<summary>📄 <strong>Code: what goes where in a frame</strong></summary>
+
+```java
+double calculateNormalisedScore(List<Answer> answers) {
+    double score = getScore(answers);       // 'answers' and 'score' → Local Variables array
+    return normalizeScore(score);
+}
+
+double normalizeScore(double score) {
+    return (score - minScore) / (maxScore - minScore);  // subtraction + division
+}                                                       // evaluated on the Operand Stack
+```
+
+`answers` and `score` sit in the **Local Variables** array of their frames. The subtraction and division in `normalizeScore` are carried out on the **Operand Stack** — operands are pushed, subtracted, divided, and the result pushed back. **Frame Data** supplies the constant-pool pointer that resolves the `getScore` / `normalizeScore` call targets, plus any exception-handler table for the method.
+</details>
+
 ### Object vs Reference: Heap vs Stack
 
 This trips up many people. When you write `Student s = new Student();`:
@@ -656,6 +802,7 @@ This trips up many people. When you write `Student s = new Student();`:
 - The **reference** `s` (a pointer to that object) lives in the current **frame on the Stack**.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     subgraph Stack["🧵 Thread Stack (frame for main)"]
         REF["s  ──────────┐"]
@@ -708,6 +855,7 @@ public class MemPeek {
 This is the canonical picture of how the runtime data area is carved up, and which flag controls each region:
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     subgraph TOTAL["Runtime Data Area (total process memory)"]
         direction TB
@@ -744,6 +892,19 @@ flowchart TB
 
 > **PermGen vs Metaspace (must-know for modern Java):** Up to **Java 7**, class metadata and the interned-String pool lived in a fixed-size **Permanent Generation (PermGen)** *inside the heap* — and overflowing it caused the infamous `OutOfMemoryError: PermGen space`. From **Java 8**, PermGen was **removed**; class metadata moved to **Metaspace**, which lives in **native memory** and auto-grows by default. (The interned-String pool moved to the regular heap back in Java 7.) So on Java 8+ you'll see `OutOfMemoryError: Metaspace`, not PermGen.
 
+### Common JVM Errors — Mapped to the Architecture
+
+Most of the runtime failures you'll ever see trace back to a specific subsystem or memory area. Keeping this map in your head lets you jump from an error message straight to the part of the JVM to investigate.
+
+| Error | Type | Which part raises it | Typical cause |
+|-------|------|----------------------|---------------|
+| `ClassNotFoundException` | checked **Exception** | ClassLoader (§6), during an *explicit* load (`Class.forName` / `loadClass`) | A required class/JAR isn't on the classpath (e.g. a DB driver never added) |
+| `NoClassDefFoundError` | **Error** (LinkageError) | JVM runtime | Class was present at compile time but missing at run time — deleted/moved `.class`, packaging mismatch, or a failed static initializer |
+| `OutOfMemoryError: Java heap space` | **Error** | Heap (§7) via the GC | Heap can't fit a new object even after GC — undersized heap or a memory leak |
+| `OutOfMemoryError: Metaspace` | **Error** | Method Area / Metaspace (§7) | Too many classes loaded (e.g. leaking classloaders, aggressive dynamic class generation) |
+| `StackOverflowError` | **Error** | A thread's JVM Stack (§7) | New stack frames exhaust the thread's stack — usually deep or infinite recursion |
+| `VerifyError` | **Error** | Bytecode Verifier during Linking (§6.4) | Malformed or incompatible bytecode (e.g. a class built for a newer Java version run on an older one) |
+
 ---
 
 ## 8. The Execution Engine — Interpreter, JIT & Beyond
@@ -751,6 +912,7 @@ flowchart TB
 The Execution Engine is what actually **runs** the loaded, verified bytecode. It has three collaborators:
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     BC["Verified Bytecode"]
     INT["1️⃣ Interpreter<br/>Reads &amp; executes bytecode<br/>one instruction at a time.<br/>Fast startup, slow for hot loops<br/>(re-interprets the same code<br/>over and over)."]
@@ -781,6 +943,89 @@ flowchart TB
 
 > **The interpreter/JIT split is why Java "warms up."** A freshly started JVM is slower (interpreting) and speeds up as the JIT kicks in. This is why benchmarks discard early iterations and why latency-sensitive services do "warm-up" requests before taking real traffic.
 
+### Inside the JIT Compiler
+
+The JIT isn't a single black box — internally it's a short pipeline of four cooperating components:
+
+```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
+flowchart LR
+    PROF["Profiler<br/>finds hot spots<br/>(methods and loops<br/>run repeatedly)"]
+    ICG["Intermediate Code<br/>Generator<br/>emits an intermediate<br/>representation (IR)"]
+    OPT["Code Optimizer<br/>optimizes the IR<br/>(inlining, loop unrolling,<br/>dead-code elimination)"]
+    TCG["Target Code<br/>Generator<br/>emits native machine<br/>code for this CPU"]
+    PROF --> ICG --> OPT --> TCG
+    style PROF fill:#cfe8ff,stroke:#2a7ab0
+    style OPT fill:#e9fbe9,stroke:#2a8a2a
+    style TCG fill:#ffd9b3,stroke:#d4820a
+```
+
+- **Profiler** — watches execution and flags *hot spots*: code run often enough to be worth compiling.
+- **Intermediate Code Generator** — turns hot bytecode into an intermediate representation (IR) the optimizer can reason about.
+- **Code Optimizer** — applies optimizations (inlining, loop unrolling, dead-code elimination, escape analysis) to the IR.
+- **Target Code Generator** — lowers the optimized IR to native machine code for the specific CPU, which is then cached in the Code Cache.
+
+> **Cost vs benefit:** JIT-compiling a method costs *more* time up front than interpreting it once. It only pays off for code that runs many times — precisely why the JVM interprets first and compiles only proven hot paths. For a program that runs once and exits, the interpreter alone is faster.
+
+<details>
+<summary>📄 <strong>Code: why the JIT beats the interpreter on a hot loop</strong></summary>
+
+```java
+int sum = 10;
+for (int i = 0; i <= 10; i++) {
+    sum += i;
+}
+System.out.println(sum);
+```
+
+**Interpreter:** on every iteration it reads `sum` from memory, adds `i`, and writes `sum` back to memory — a full memory round-trip each pass.
+
+**JIT:** it recognizes the loop as a hot spot, keeps `sum` in a **CPU register** for the whole loop, adds `i` in-register each iteration, and writes `sum` back to memory just once after the loop ends. Removing the per-iteration memory traffic is a big part of why compiled hot loops approach native speed.
+</details>
+
+### Native Methods: JNI & Native Method Libraries
+
+Sometimes Java alone isn't enough — you need to touch hardware, reuse an existing C/C++ library, or reach performance the JVM's managed model won't allow. The **Java Native Interface (JNI)** is the bridge that lets JVM code call into (and be called by) code written in other languages such as C, C++, and assembly. It sits alongside the Execution Engine, exactly as shown in the §5 architecture diagram.
+
+```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
+flowchart LR
+    JAVA["Java code<br/>declares a method with<br/>the 'native' keyword"] --> JNI["JNI<br/>the bridge"]
+    JNI --> LIB["Native Method Libraries<br/>compiled C / C++ / assembly<br/>(.dll on Windows,<br/>.so on Linux/macOS)"]
+    LIB -->|loaded via System.loadLibrary| JNI
+    style JAVA fill:#cfe8ff,stroke:#2a7ab0
+    style JNI fill:#ffe9b3,stroke:#d49a00
+    style LIB fill:#ffd9b3,stroke:#d4820a
+```
+
+- The **`native` keyword** on a method declaration tells the JVM its implementation lives in a native library rather than in Java bytecode.
+- **`System.loadLibrary("...")`** loads the shared native library (`.dll` / `.so`) into memory and wires its functions to the `native` methods.
+- **Native Method Libraries** are the compiled artifacts themselves. When a native method executes, it uses the per-thread **Native Method Stack** (introduced in §7), not the ordinary JVM stack.
+
+Real uses: OS-level operations the JDK itself depends on (much of `java.io` and `java.net` bottoms out in native calls), direct hardware access, and high-performance numerical libraries.
+
+<details>
+<summary>📄 <strong>Code: declaring and loading a native method</strong></summary>
+
+```java
+public class NativeDemo {
+    // No body — the implementation is provided by a native library.
+    public native void sayHello();
+
+    static {
+        // Loads libhello.so (Linux/macOS) or hello.dll (Windows) from java.library.path
+        System.loadLibrary("hello");
+    }
+
+    public static void main(String[] args) {
+        new NativeDemo().sayHello();   // dispatches into the native C/C++ implementation
+    }
+}
+```
+
+The toolchain: compile with `javac NativeDemo.java`, then run `javac -h .` (or the older `javah`) to generate a C header with the expected function signature. You implement that function in C, compile it into `libhello.so` / `hello.dll`, and place it on `java.library.path` so `System.loadLibrary` can find it.
+</details>
+
 ---
 
 ## 9. GraalVM — The Polyglot, Native-Image JVM
@@ -804,6 +1049,7 @@ GraalVM is three things bundled together:
 At the heart of GraalVM is a component called **Truffle** + the **Graal compiler**, sitting on a shared runtime called **SubstrateVM** (for native images).
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     subgraph LANGS["🌐 Languages (front-ends)"]
         direction LR
@@ -842,6 +1088,7 @@ The pieces, in plain terms:
 These are the two ways to use GraalVM, and the distinction is the crux of every GraalVM discussion.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     subgraph JITMODE["JIT mode — 'GraalVM as a better JVM'"]
         direction TB
@@ -874,6 +1121,7 @@ flowchart LR
 `native-image` performs a **static, whole-program analysis** at build time. Starting from your `main()`, it computes the **reachable** set of classes, methods, and fields — *points-to analysis* — and **bakes only those** into the binary. Anything unreachable is discarded (this is why binaries are small).
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     M["main() entry point"] --> R["Points-to / reachability analysis<br/>(what can ever be called?)"]
     R --> INIT["Run static initializers at BUILD time<br/>(heap snapshotting)"]
@@ -937,6 +1185,7 @@ $ java -agentlib:native-image-agent=config-output-dir=META-INF/native-image \
 ### 9.6 GraalVM vs the Traditional HotSpot JVM
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     subgraph HS["Traditional HotSpot JVM"]
         H1["Startup: seconds"]
@@ -1001,6 +1250,7 @@ This is the marquee use case and a hot interview topic, so let's be concrete abo
 **The Java cold-start problem on Lambda.** AWS Lambda is **scale-to-zero**: when no instance is warm, an incoming request triggers a **cold start** — AWS provisions a new execution environment and boots your runtime. For a traditional JVM function this means: start the JVM → load classes → initialize the framework (Spring context!) → *then* serve the request, all while the user waits. For a Spring app this can be **3–6+ seconds** of cold-start latency. Worse, the JIT hasn't warmed up, so even after starting, the first requests are slow.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     subgraph TRAD["❄️ Traditional JVM Lambda — slow cold start"]
         direction LR
@@ -1039,6 +1289,7 @@ Historically Spring + Lambda was the *worst* offender for cold starts because Sp
 - The **`spring-boot-starter-parent` + the GraalVM/Native Build Tools plugin** wire it all up: `mvn -Pnative native:compile` (or `./gradlew nativeCompile`) produces the executable.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     SRC["Spring Boot 3 app<br/>(idiomatic, reflection-using)"] --> AOT["Spring AOT processing<br/>(build time)<br/>• analyze beans &amp; proxies<br/>• generate reachability metadata<br/>• pre-compute app context"]
     AOT --> NI["GraalVM native-image<br/>AOT compile + bake SubstrateVM"]
@@ -1118,6 +1369,7 @@ Most collectors are built on a **Mark-Sweep-Compact** foundation.
 **Step 1 — Mark.** Starting from "GC roots" (live thread stacks, static fields, JNI refs), the collector walks every reachable object and **marks** it as live. Anything not reached is garbage. (This scan is the expensive part — it must visit every live object.)
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     subgraph Before["Before Marking"]
         b1["obj"]:::live --- b2["obj"]:::live --- b3["obj"]:::live --- b4["obj"]:::live --- b5["obj"]:::live
@@ -1135,6 +1387,7 @@ flowchart LR
 **Step 3 — Compact (Deletion with Compacting).** To beat fragmentation, the collector **slides live objects together** at one end, leaving one big contiguous free block. New allocations become trivially fast (just bump a pointer).
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     SWEEP["After Sweep only:<br/>[LIVE][gap][LIVE][gap][gap][LIVE]  ← fragmented free space"]
     COMPACT["After Compact:<br/>[LIVE][LIVE][LIVE][........ one big free block ........]"]
@@ -1154,6 +1407,7 @@ Marking and compacting *all* objects every time is wasteful. The key insight fro
 If most objects die young, then *focus collection effort on the young area* and rarely touch the long-lived ones. So the heap is split into **generations**:
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     subgraph H["Heap"]
         direction LR
@@ -1180,6 +1434,7 @@ flowchart LR
 Here's the actual journey of an object through the young generation, step by step. This walkthrough is a frequent whiteboard question.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     A["1 New objects allocated in EDEN.<br/>Both survivor spaces start empty."]
     B["2 Eden fills up → triggers a MINOR GC<br/>(a 'Stop-The-World' pause)."]
@@ -1239,6 +1494,7 @@ A subtle but classic interview trap that proves reachability ≠ reference-count
 > An **Island of Isolation** is a group of objects that reference *each other* but are not referenced by any live (reachable) object in the application. The whole group is garbage — even though, internally, every object "has a reference."
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     ROOT["GC Roots<br/>(stack, statics)"]
     subgraph ISLAND["🏝️ Island of Isolation — unreachable, all collectable"]
@@ -1282,6 +1538,7 @@ public class Island {
 Java offers several collectors, each a different trade-off between **throughput** (total work done) and **responsiveness** (short pause times). Pick based on your app's goal.
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     SER["Serial GC<br/>1 thread, STW<br/>small heaps, single CPU"]
     PAR["Parallel GC<br/>(Throughput)<br/>N threads, STW<br/>batch jobs"]
@@ -1355,6 +1612,7 @@ GC tuning is empirical — *profile first*, change one thing, measure. Useful le
 ### What you can profile
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart TB
     APP["Running JVM"]
     CPU["🔥 CPU profiling<br/>Which methods consume CPU?<br/>→ flame graphs, hot methods"]
@@ -1387,6 +1645,7 @@ flowchart TB
 ### How to profile, step by step
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 flowchart LR
     A["1 Define the symptom<br/>(high CPU? rising memory?<br/>slow p99? long GC?)"] -->
     B["2 Reproduce under<br/>realistic load"] -->
@@ -1454,6 +1713,7 @@ A **thread dump** is an instantaneous snapshot of **every thread** in the JVM an
 ### Thread states you'll see
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 36, "padding": 6, "useMaxWidth": true}, "sequence": {"useMaxWidth": true, "boxMargin": 6, "width": 130, "height": 30, "messageMargin": 22}, "themeVariables": {"fontSize": "14px"}}}%%
 stateDiagram-v2
     [*] --> NEW
     NEW --> RUNNABLE: start()
@@ -1556,7 +1816,7 @@ Found one Java-level deadlock:
 
 ---
 
-## 13. ❓ FAANG Interview Questions (70+)
+## 13. ❓ FAANG Interview Questions (75+)
 
 Grouped by topic. Click any question to reveal a crisp, interview-ready answer. Aim to *explain*, not recite.
 
@@ -2006,18 +2266,47 @@ Use `top -H -p <pid>` to find the busy OS thread's ID, convert it to hex, then m
 Define the symptom (CPU? memory? latency? GC?), reproduce under realistic load, attach the right tool (JFR/async-profiler for CPU, MAT for memory, GC logs for pauses, thread dumps for hangs), find the dominant bottleneck, fix **one** thing, then re-measure to confirm and check for regressions.
 </details>
 
+### 🔹 Stack Frames, JIT Internals & Native Methods
+
+<details>
+<summary><strong>Q73. What are the three parts of a stack frame?</strong></summary>
+
+**Local Variables** array (method parameters + declared locals; `this` in slot 0 for instance methods), the **Operand Stack** (LIFO scratch space where bytecode pushes/pops operands for calculations), and **Frame Data** (a reference into the runtime constant pool plus the method's exception table). All three are sized at **compile time**.
+</details>
+
+<details>
+<summary><strong>Q74. What are the internal components of the JIT compiler?</strong></summary>
+
+A **Profiler** that identifies hot spots, an **Intermediate Code Generator** that produces an IR from hot bytecode, a **Code Optimizer** that optimizes the IR (inlining, loop unrolling, escape analysis, dead-code elimination), and a **Target Code Generator** that emits native machine code (cached in the Code Cache). Compilation costs time up front, so it only pays off for repeatedly executed code.
+</details>
+
+<details>
+<summary><strong>Q75. What is the JNI, and when do you use native methods?</strong></summary>
+
+The **Java Native Interface (JNI)** is the bridge that lets Java call into (and be called by) code written in C, C++, or assembly. You mark a method `native` (no Java body) and load the compiled library — a `.dll` (Windows) or `.so` (Linux/macOS) — with `System.loadLibrary(...)`. Native methods run on the per-thread **Native Method Stack**. Use it for hardware access, reusing existing native libraries, OS-level operations, or performance-critical code the JVM can't express.
+</details>
+
 ---
 
 ## 14. ⚡ Quick-Revision Cheat Sheet
 
-**The stack of acronyms**
-`JDK ⊃ JRE ⊃ JVM`. JVM runs bytecode · JRE = JVM + libs · JDK = JRE + tools (`javac`).
+Points are grouped **by topic → subtopic** so you can revise one area at a time.
+
+### 🧩 Fundamentals & Terminology
+
+**The stack of acronyms:** `JDK ⊃ JRE ⊃ JVM`. JVM runs bytecode · JRE = JVM + libs · JDK = JRE + tools (`javac`).
 
 **Three faces of JVM:** Specification (doc) → Implementation (HotSpot/OpenJ9/GraalVM) → Instance (running process, one per app).
 
 **Pipeline:** `.java` → `javac` → `.class` (bytecode) → ClassLoader → Verify → Execution Engine (Interpreter + JIT) → native code.
 
 **Three subsystems:** ① ClassLoader · ② Runtime Data Areas · ③ Execution Engine.
+
+<img src="images/jvm-architecture-overview.png" alt="JVM architecture at a glance: ClassLoader Subsystem, Runtime Data Area, and Execution Engine with the Native Method Interface" width="480" />
+
+*The whole architecture on one line — ClassLoader → Runtime Data Areas → Execution Engine (with JNI to native libs). (Full-size version in [§5](#5-the-big-picture--full-jvm-architecture-diagram).)*
+
+### 📦 ClassLoader Subsystem
 
 **ClassLoaders (parent → child):** Bootstrap (native, `rt.jar`) → Extension/Platform (`lib/ext`) → Application (CLASSPATH). Identity = `(name, loader)`.
 
@@ -2029,11 +2318,25 @@ Define the symptom (CPU? memory? latency? GC?), reproduce under realistic load, 
 
 **`ClassNotFoundException`** = checked Exception, explicit dynamic load fails (missing JAR). **`NoClassDefFoundError`** = Error, present at compile time but gone at runtime.
 
+### 🧠 Runtime Data Areas (Memory)
+
 **Runtime data areas:** *Shared* → Method Area (class meta, statics, constant pool) + Heap (objects/arrays). *Per-thread* → Stack (frames/locals), PC Register, Native Stack. Shared = not thread-safe; per-thread = safe.
+
+**Stack frame (3 parts, sizes fixed at compile time):** Local Variables array · Operand Stack (LIFO scratch for calculations) · Frame Data (constant-pool ref + exception table). One frame per method call.
 
 **PermGen (≤Java7, in heap) → Metaspace (≥Java8, native memory, auto-grows).**
 
-**Errors:** `StackOverflowError` (deep recursion) · `OutOfMemoryError: Java heap space` (heap full / leak) · `: Metaspace` (class meta).
+**Memory errors:** `StackOverflowError` (deep recursion) · `OutOfMemoryError: Java heap space` (heap full / leak) · `: Metaspace` (class meta).
+
+### ⚙️ Execution Engine
+
+**Execution engine:** Interpreter (instant, slow loops) + JIT (C1 client / C2 server, tiered) → "warm-up" effect.
+
+**Inside the JIT:** Profiler (finds hot spots) → Intermediate Code Generator → Code Optimizer → Target Code Generator (native, cached). Compiling costs time up front, so it's worth it only for hot code.
+
+**JNI / native methods:** `native` keyword (no Java body) + `System.loadLibrary` bridge to C/C++/assembly libs (`.dll` / `.so`); native calls run on the per-thread Native Method Stack.
+
+### 🗑️ Garbage Collection
 
 **GC algorithm:** Mark → Sweep → Compact. **Reachability**, not reference counting (cycles & islands are collected).
 
@@ -2045,11 +2348,13 @@ Define the symptom (CPU? memory? latency? GC?), reproduce under realistic load, 
 
 **Collectors:** Serial (1 thread) · Parallel (throughput/batch) · CMS (low-pause, deprecated) · **G1 (default ≥Java9, balanced)** · ZGC/Shenandoah (sub-10ms, huge heaps). All GC is Stop-The-World; minimize Full GC.
 
-**Execution engine:** Interpreter (instant, slow loops) + JIT (C1 client / C2 server, tiered) → "warm-up" effect.
+### 🚀 GraalVM, Native Image & Cold Start
 
 **GraalVM:** = better JIT (Graal, written in Java) **+** Native Image (AOT) **+** polyglot (Truffle). **JIT mode** = highest peak throughput, slow start. **Native Image** = AOT compile whole app → standalone binary (SubstrateVM baked in), **ms startup, no warm-up, tiny memory**, but **closed-world** (reflection/proxies/JNI need metadata) and lower peak throughput.
 
 **GraalVM on Lambda:** kills the Java **cold start** — no JVM boot, no class load, framework init done at build time. **Spring Boot 3 + Native Image** = the most effective cold-start cure (Spring AOT auto-generates reachability metadata + pre-computes the context): ~4s → ~100ms. Alternative = **AWS SnapStart** (snapshots a warmed JVM, keeps full dynamic features).
+
+### 🔧 Tuning, Flags & Troubleshooting
 
 **Key flags:** `-Xms`/`-Xmx` (heap), `-Xss` (stack), `-Xmn` (young), `-XX:+UseG1GC`, `-XX:MaxGCPauseMillis`, `-XX:+HeapDumpOnOutOfMemoryError`, `-Xlog:gc*`. Native build: `native-image`, `mvn -Pnative native:compile`.
 
